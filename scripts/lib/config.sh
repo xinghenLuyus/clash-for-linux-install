@@ -65,14 +65,23 @@ _detect_ext_addr() {
   local service_active=false
   service_is_active >&/dev/null && service_active=true
 
-  _is_port_used "$EXT_PORT" && [ "$service_active" != "true" ] && {
+  _is_port_used "$EXT_PORT" && ! _is_controller_api "$EXT_PORT" && [ "$service_active" != "true" ] && {
     local new_port
     new_port=$(_get_random_port) || return
-    _failcat '🎯' "端口冲突：[external-controller] ${EXT_PORT} 🎲 随机分配 $new_port"
+    _failcat '🎯' "端口冲突：[external-controller] ${EXT_PORT} 已被非 Clash/Mihomo 服务占用 🎲 随机分配 $new_port"
     EXT_PORT=$new_port
     EXT_ADDR="$ext_ip:$new_port" "$BIN_YQ" -i '.external-controller = env(EXT_ADDR)' "$CLASH_CONFIG_MIXIN"
     _merge_config
   }
+}
+
+_is_controller_api() {
+  local port=$1 body
+  [ -n "$port" ] || return 1
+  body=$(curl -s --noproxy '*' --max-time 2 "http://127.0.0.1:${port}/version" 2>/dev/null) || return 1
+  printf '%s' "$body" | "$BIN_YQ" -p json -e '
+    has("version") or has("meta") or has("premium")
+  ' >/dev/null 2>&1
 }
 
 _get_secret() {

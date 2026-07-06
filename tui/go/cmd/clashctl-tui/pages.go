@@ -65,7 +65,10 @@ func (a *app) proxiesPage() string {
 		}
 		b.WriteString("可按 r 刷新，或在终端检查：\n")
 		b.WriteString("  clashctl node list\n")
-		b.WriteString("  clashctl sub list\n\n")
+		b.WriteString("  clashctl sub list\n")
+		b.WriteString("  curl --noproxy '*' http://127.0.0.1:<controller-port>/version\n\n")
+		b.WriteString("如果 controller 端口返回 MinIO/Nginx/其他 HTML 页面，说明端口被别的服务占用。\n")
+		b.WriteString("可执行：clashctl off -s && clashctl on -s 触发端口重新检测。\n\n")
 		b.WriteString("配置文件位置：\n")
 		b.WriteString("  当前订阅：")
 		b.WriteString(a.currentProfilePathHint())

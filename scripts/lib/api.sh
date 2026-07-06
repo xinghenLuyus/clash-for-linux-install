@@ -59,7 +59,11 @@ api_patch_json() {
 
 api_available() {
     service_is_active >&/dev/null || return 1
-    api_get /version >/dev/null 2>&1
+    local body
+    body=$(api_get /version 2>/dev/null) || return 1
+    printf '%s' "$body" | "$BIN_YQ" -p json -e '
+      has("version") or has("meta") or has("premium")
+    ' >/dev/null 2>&1
 }
 
 api_configs() {

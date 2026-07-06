@@ -41,8 +41,10 @@ _tui_status_line() {
 
     service_is_active >&/dev/null && service_state=running
     if [ "$service_state" = running ]; then
-        live_json=$(api_configs 2>/dev/null)
-        [ -n "$live_json" ] && api_state=ok
+        api_available && {
+            live_json=$(api_configs 2>/dev/null)
+            api_state=ok
+        }
     fi
 
     tunstatus >&/dev/null && tun_state=on
@@ -67,8 +69,10 @@ _tui_status_block() {
 
     api_state=unavailable
     if [ "$service_state" = running ]; then
-        live_json=$(api_configs 2>/dev/null)
-        [ -n "$live_json" ] && api_state=available
+        api_available && {
+            live_json=$(api_configs 2>/dev/null)
+            api_state=available
+        }
     fi
 
     tun_state=off

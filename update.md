@@ -149,3 +149,8 @@
   - `proxy_groups_tsv` 和 `api_proxy_groups_tsv` 改为稳定枚举 `/proxies` 中所有带 `all` 字段的策略组，避免复杂排序表达式在不同 yq 版本下失败后被吞掉，导致 API 正常但 TUI 代理页为空。
   - 代理页空状态增加排障提示，直接展示订阅配置、基础配置、运行配置和 subconverter 日志的位置。
   - 刷新 Go TUI Linux `amd64` / `386` 预编译产物。
+- Controller API 识别修复：
+  - `api_available` 改为校验 `/version` 是否为 Clash/Mihomo JSON，不再把 MinIO/Nginx 等 HTML 响应误判为 API 正常。
+  - `clashctl on -s` 启动服务前会检查 `external-controller` 端口；若端口被非 Clash/Mihomo 服务占用，会随机分配新端口并重新合并配置。
+  - Overview / 顶部状态栏改为基于严格 API 校验显示状态。
+  - 代理页空状态增加 controller 端口冲突排障提示。

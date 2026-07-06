@@ -33,6 +33,7 @@ on_service_only() {
         return 0
     }
     _detect_proxy_port
+    _detect_ext_addr
     service_start
     service_is_active >&/dev/null || {
         _failcat "$CLASHCTL_KERNEL 启动失败"
