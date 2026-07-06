@@ -30,6 +30,7 @@ type app struct {
 	modal           *modal
 	toast           string
 	profilesError   string
+	proxyError      string
 }
 
 type modal struct {

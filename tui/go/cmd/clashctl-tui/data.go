@@ -7,6 +7,7 @@ import (
 )
 
 func (a *app) loadProxyGroups() {
+	a.proxyError = ""
 	out := a.capture("proxy_groups_tsv")
 	var groups []proxyGroup
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
@@ -21,6 +22,9 @@ func (a *app) loadProxyGroups() {
 			parts = append(parts, "")
 		}
 		groups = append(groups, proxyGroup{Name: parts[0], Type: parts[1], Now: parts[2], Count: parts[3]})
+	}
+	if len(groups) == 0 && strings.TrimSpace(out) != "" {
+		a.proxyError = oneLine(out)
 	}
 	a.proxyGroups = groups
 	if a.proxyMember {
@@ -183,6 +187,24 @@ func (a *app) currentProfile() profile {
 		idx = 0
 	}
 	return a.profiles[idx]
+}
+
+func (a *app) currentProfilePathHint() string {
+	profiles := a.profiles
+	if len(profiles) == 0 {
+		if fallback, err := a.loadProfilesFromMeta(); err == nil {
+			profiles = fallback
+		}
+	}
+	for _, p := range profiles {
+		if p.Current && p.ID != "" {
+			return filepath.Join(a.home, "resources", "profiles", p.ID+".yaml")
+		}
+	}
+	if len(profiles) > 0 && profiles[0].ID != "" {
+		return filepath.Join(a.home, "resources", "profiles", profiles[0].ID+".yaml")
+	}
+	return filepath.Join(a.home, "resources", "profiles", "<id>.yaml")
 }
 
 func (a *app) settingState(item string) string {

@@ -57,7 +57,28 @@ func (a *app) proxiesPage() string {
 	}
 	max := maxInt(len(a.proxyGroups), len(a.proxyMembers))
 	if max == 0 {
-		b.WriteString("\n未获取到策略组。请确认服务已启动且控制器 API 可用。\n")
+		b.WriteString("\n未获取到策略组。\n\n")
+		if a.proxyError != "" {
+			b.WriteString("读取异常：")
+			b.WriteString(a.proxyError)
+			b.WriteString("\n\n")
+		}
+		b.WriteString("可按 r 刷新，或在终端检查：\n")
+		b.WriteString("  clashctl node list\n")
+		b.WriteString("  clashctl sub list\n\n")
+		b.WriteString("配置文件位置：\n")
+		b.WriteString("  当前订阅：")
+		b.WriteString(a.currentProfilePathHint())
+		b.WriteByte('\n')
+		b.WriteString("  基础配置：")
+		b.WriteString(a.home)
+		b.WriteString("/resources/config.yaml\n")
+		b.WriteString("  运行配置：")
+		b.WriteString(a.home)
+		b.WriteString("/resources/runtime.yaml\n")
+		b.WriteString("  转换日志：")
+		b.WriteString(a.home)
+		b.WriteString("/bin/subconverter/latest.log\n")
 		return b.String()
 	}
 	for i := 0; i < max; i++ {

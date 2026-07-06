@@ -25,14 +25,9 @@ proxy_validate_delay_timeout() {
 proxy_groups_tsv() {
     api_proxies | "$BIN_YQ" -p json '
       .proxies as $p |
-      ($p.GLOBAL.all // []) as $globalNames |
-      ([ $p | to_entries[] | select(.key != "GLOBAL" and (.value.all != null)) | .key ]) as $allGroups |
-      ([ $globalNames[] | select($p[.] != null and $p[.].all != null) ]) as $globalGroups |
-      (
-        ($allGroups | map(select(. as $name | ($globalGroups | index($name) | not)))) +
-        $globalGroups
-      )[] |
-      [., ($p[.].type // ""), ($p[.].now // ""), (($p[.].all // []) | length)] | @tsv
+      $p | to_entries[] |
+      select(.key != "GLOBAL" and (.value.all != null)) |
+      [.key, (.value.type // ""), (.value.now // ""), ((.value.all // []) | length)] | @tsv
     ' 2>/dev/null
 }
 

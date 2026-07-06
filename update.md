@@ -145,3 +145,7 @@
   - 当当前终端残留 `http_proxy` / `https_proxy` / `all_proxy` 指向本机 Clash 端口，但内核服务已停止时，订阅下载会临时禁用这些代理变量并直连，避免误报 `127.0.0.1:7890 connection refused`。
   - subconverter 本机接口调用统一增加 `--noproxy '*'`，避免本地转换服务请求被终端代理变量劫持。
   - 该修复位于订阅下载服务层，`clashctl sub update` 和 TUI 订阅更新都会受益。
+- 代理页策略组读取修复：
+  - `proxy_groups_tsv` 和 `api_proxy_groups_tsv` 改为稳定枚举 `/proxies` 中所有带 `all` 字段的策略组，避免复杂排序表达式在不同 yq 版本下失败后被吞掉，导致 API 正常但 TUI 代理页为空。
+  - 代理页空状态增加排障提示，直接展示订阅配置、基础配置、运行配置和 subconverter 日志的位置。
+  - 刷新 Go TUI Linux `amd64` / `386` 预编译产物。
