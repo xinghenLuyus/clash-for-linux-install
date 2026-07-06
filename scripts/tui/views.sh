@@ -6,11 +6,11 @@ _tui_mask_secret() {
 
 _tui_current_profile() {
     "$BIN_YQ" -r '
-      (.use // "") as $use |
+      (.use // "" | tostring) as $use |
       if ($use == "" or $use == null) then
         "未启用"
       else
-        (.profiles // [] | map(select(.id == $use))[0].url // ("[" + ($use | tostring) + "]"))
+        (.profiles // [] | map(select((.id | tostring) == $use))[0].url // ("[" + ($use | tostring) + "]"))
       end
     ' "$CLASH_PROFILES_META" 2>/dev/null
 }
@@ -18,9 +18,9 @@ _tui_current_profile() {
 _tui_profiles_block() {
     printf '订阅配置\n\n'
     "$BIN_YQ" -r '
-      (.use // "") as $use |
+      (.use // "" | tostring) as $use |
       (.profiles // [])[] |
-      (if (.id == $use) then "*" else " " end) + " [" + (.id | tostring) + "] " + .url
+      (if ((.id | tostring) == $use) then "*" else " " end) + " [" + (.id | tostring) + "] " + (.url // "")
     ' "$CLASH_PROFILES_META" 2>/dev/null || printf '暂无订阅\n'
     printf '\n操作：Enter 进入订阅管理，可添加/切换/更新/删除订阅。\n'
 }

@@ -60,28 +60,38 @@ func (a *app) executeProfileAction(item string) string {
 			cmd += "--use "
 		}
 		cmd += shellQuote(strings.TrimSpace(url))
-		return a.capture(cmd)
+		return a.withBusy("新增订阅", "正在下载、转换并校验订阅，请等待结果返回。", func() string {
+			return a.capture(cmd)
+		})
 	case "切换订阅":
 		id, ok := a.prompt("请输入订阅 ID")
 		if !ok || strings.TrimSpace(id) == "" {
 			return "已取消切换订阅。"
 		}
-		return a.capture("clashsub use " + shellQuote(strings.TrimSpace(id)))
+		return a.withBusy("切换订阅", "正在合并配置并重启内核，请等待结果返回。", func() string {
+			return a.capture("clashsub use " + shellQuote(strings.TrimSpace(id)))
+		})
 	case "更新订阅":
 		id, ok := a.prompt("请输入订阅 ID，留空更新当前订阅")
 		if !ok {
 			return "已取消更新订阅。"
 		}
 		if strings.TrimSpace(id) == "" {
-			return a.capture("clashsub update")
+			return a.withBusy("更新订阅", "正在下载、转换并校验订阅，请等待结果返回。", func() string {
+				return a.capture("clashsub update")
+			})
 		}
-		return a.capture("clashsub update " + shellQuote(strings.TrimSpace(id)))
+		return a.withBusy("更新订阅", "正在下载、转换并校验订阅，请等待结果返回。", func() string {
+			return a.capture("clashsub update " + shellQuote(strings.TrimSpace(id)))
+		})
 	case "删除订阅":
 		id, ok := a.prompt("请输入要删除的订阅 ID")
 		if !ok || strings.TrimSpace(id) == "" {
 			return "已取消删除订阅。"
 		}
-		return a.capture("clashsub del " + shellQuote(strings.TrimSpace(id)))
+		return a.withBusy("删除订阅", "正在删除订阅并刷新列表，请等待结果返回。", func() string {
+			return a.capture("clashsub del " + shellQuote(strings.TrimSpace(id)))
+		})
 	case "订阅日志":
 		return strings.Join(readOptionalTail(filepath.Join(a.home, "resources", "profiles.log"), 64*1024, 120), "\n")
 	default:
@@ -296,7 +306,9 @@ func (a *app) handlePageEnter() bool {
 		if p.ID == "" {
 			return true
 		}
-		a.actionOutput = strings.TrimSpace(a.capture("clashsub use " + shellQuote(p.ID)))
+		a.actionOutput = strings.TrimSpace(a.withBusy("切换订阅", "正在合并配置并重启内核，请等待结果返回。", func() string {
+			return a.capture("clashsub use " + shellQuote(p.ID))
+		}))
 		a.loadProfiles()
 		a.refresh(true)
 		a.message = "已切换订阅"
@@ -319,14 +331,18 @@ func (a *app) handleShortcut(key string) bool {
 			if p.ID == "" {
 				a.actionOutput = "当前没有可更新的订阅。"
 			} else {
-				a.actionOutput = a.capture("clashsub update " + shellQuote(p.ID))
+				a.actionOutput = a.withBusy("更新订阅", "正在下载、转换并校验订阅，请等待结果返回。", func() string {
+					return a.capture("clashsub update " + shellQuote(p.ID))
+				})
 			}
 		case "x":
 			p := a.currentProfile()
 			if p.ID == "" {
 				a.actionOutput = "当前没有可删除的订阅。"
 			} else {
-				a.actionOutput = a.capture("clashsub del " + shellQuote(p.ID))
+				a.actionOutput = a.withBusy("删除订阅", "正在删除订阅并刷新列表，请等待结果返回。", func() string {
+					return a.capture("clashsub del " + shellQuote(p.ID))
+				})
 			}
 		default:
 			return false

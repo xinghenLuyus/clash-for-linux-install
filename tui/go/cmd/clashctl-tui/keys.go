@@ -118,3 +118,13 @@ func (a *app) confirm(title string, label string) (bool, bool) {
 		}
 	}
 }
+
+func (a *app) withBusy(title string, label string, fn func() string) string {
+	a.modal = &modal{Title: title, Label: label, Value: "处理中，请不要退出终端。", Error: "命令执行中，完成后会自动回到当前页面。"}
+	a.render()
+	defer func() {
+		a.modal = nil
+		a.message = ""
+	}()
+	return fn()
+}

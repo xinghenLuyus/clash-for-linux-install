@@ -48,3 +48,16 @@ func localizeStatus(s string) string {
 	)
 	return replacer.Replace(s)
 }
+
+func yamlScalar(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, " #"); i >= 0 {
+		s = strings.TrimSpace(s[:i])
+	}
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
+}

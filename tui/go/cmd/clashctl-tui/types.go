@@ -29,6 +29,7 @@ type app struct {
 	pages           []page
 	modal           *modal
 	toast           string
+	profilesError   string
 }
 
 type modal struct {

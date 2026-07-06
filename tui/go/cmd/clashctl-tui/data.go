@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -84,7 +85,8 @@ func (a *app) currentProxyMember() proxyMember {
 }
 
 func (a *app) loadProfiles() {
-	out := a.capture(`"$BIN_YQ" -r '(.use // "") as $use | (.profiles // [])[] | [(.id|tostring), .url, (if (.id == $use) then "true" else "false" end)] | @tsv' "$CLASH_PROFILES_META"`)
+	a.profilesError = ""
+	out := a.capture(`"$BIN_YQ" -r '(.use // "" | tostring) as $use | (.profiles // [])[] | [(.id|tostring), (.url // ""), (if ((.id | tostring) == $use) then "true" else "false" end)] | @tsv' "$CLASH_PROFILES_META"`)
 	var profiles []profile
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		if strings.TrimSpace(line) == "" {
@@ -99,10 +101,77 @@ func (a *app) loadProfiles() {
 		}
 		profiles = append(profiles, profile{ID: parts[0], URL: parts[1], Current: parts[2] == "true"})
 	}
+	if len(profiles) == 0 {
+		fallback, err := a.loadProfilesFromMeta()
+		if err != nil {
+			a.profilesError = err.Error()
+		}
+		if len(fallback) > 0 {
+			profiles = fallback
+			a.profilesError = ""
+		} else if strings.TrimSpace(out) != "" {
+			a.profilesError = oneLine(out)
+		}
+	}
 	a.profiles = profiles
 	if a.subSelected >= len(a.profiles) {
 		a.subSelected = maxInt(0, len(a.profiles)-1)
 	}
+}
+
+func (a *app) loadProfilesFromMeta() ([]profile, error) {
+	path := filepath.Join(a.home, "resources", "profiles.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	lines := strings.Split(string(data), "\n")
+	use := ""
+	var profiles []profile
+	current := profile{}
+	inProfile := false
+	flush := func() {
+		if current.ID == "" && current.URL == "" {
+			return
+		}
+		profiles = append(profiles, current)
+		current = profile{}
+	}
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "use:") {
+			use = yamlScalar(strings.TrimSpace(strings.TrimPrefix(line, "use:")))
+			continue
+		}
+		if strings.HasPrefix(line, "- ") {
+			flush()
+			inProfile = true
+			line = strings.TrimSpace(strings.TrimPrefix(line, "- "))
+		}
+		if !inProfile || !strings.Contains(line, ":") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		key := strings.TrimSpace(parts[0])
+		val := yamlScalar(strings.TrimSpace(parts[1]))
+		switch key {
+		case "id":
+			current.ID = val
+		case "url":
+			current.URL = val
+		}
+	}
+	flush()
+	for i := range profiles {
+		profiles[i].Current = profiles[i].ID != "" && profiles[i].ID == use
+	}
+	return profiles, nil
 }
 
 func (a *app) currentProfile() profile {

@@ -107,7 +107,14 @@ func (a *app) profilesPage() string {
 	b.WriteString("订阅\n\n")
 	if len(a.profiles) == 0 {
 		b.WriteString("暂无订阅。\n\n")
-		b.WriteString("按 a 新增订阅。新增完成后会在这里显示结果。\n")
+		if a.profilesError != "" {
+			b.WriteString("订阅列表读取异常：")
+			b.WriteString(a.profilesError)
+			b.WriteString("\n\n")
+			b.WriteString("可按 Enter 查看原始订阅配置，或按 r 重新刷新。\n")
+		} else {
+			b.WriteString("按 a 新增订阅。新增完成后会在这里显示结果。\n")
+		}
 		if a.actionOutput != "" {
 			b.WriteString("\n执行结果\n")
 			b.WriteString(a.actionOutput)
