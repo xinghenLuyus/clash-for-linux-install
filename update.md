@@ -57,3 +57,28 @@
   - 新增 `scripts/tui/app.sh`，作为常驻式 TUI 主循环。
   - `clashui` / `clashctl tui` 现在进入统一页面导航；页面操作结束后回到 TUI，不再额外要求手动确认返回。
   - 主界面按 Clash Verge-like 信息架构组织为 Overview / Profiles / Proxies / Logs / Settings / Core / Web UI。
+
+## Go TUI 原型
+
+- 新增 `dev-go` 分支上的 Go TUI 原型，目标是替代脆弱的 fzf 拼装层，保留轻量、无第三方 Go 依赖的实现方式。
+- 新增 `tui/go/go.mod` 与 `tui/go/cmd/clashctl-tui/main.go`：
+  - 使用 Go 标准库直接控制终端 raw mode、alternate screen、键盘输入和全屏渲染。
+  - 页面布局固定为顶部状态栏、左侧菜单、右侧内容预览、底部动态操作区。
+  - 支持 `q` / `Esc` / `Ctrl-C` 退出，`↑↓` 切换页面，`r` 刷新，`Enter` 执行当前页面动作。
+  - 当前阶段页面数据仍复用 `scripts/lib` 与 `scripts/tui/*` 的服务函数，但输出会被捕获进 Go TUI 内容区，避免普通 CLI 输出直接散落在终端。
+- 新增 `tui/go/build-tui.sh`，用于构建 `bin/clashctl-tui`。
+- `clashctl tui` 与 `clashui` 入口改为优先运行 `bin/clashctl-tui`。
+- 安装流程新增可选复制：源码目录存在可执行 `bin/clashctl-tui` 时，会安装到目标 `bin/`。
+- 新增 `_tui_status_line`，为 Go TUI 顶部栏提供运行态摘要。
+- `.gitignore` 新增 `bin/`，避免把本地构建产物提交进仓库。
+
+## Go TUI 收敛
+
+- Go 工程整体移入 `tui/go/`，避免在项目根目录堆放 TUI 工程文件。
+- 删除 fzf TUI 交互适配层，以及 `clashctl node` / proxy 共享层中的 fzf 可选选择器，仅保留 Go TUI、编号式 CLI 和页面展示所需的 shell 服务/渲染函数。
+- `clashctl tui` / `clashui` 不再回退到 fzf；如果 `bin/clashctl-tui` 不存在或当前系统不可执行，会明确报错并提示先构建。
+- 安装后的 TUI 引导从检测 `fzf` 改为检测可运行的 Go TUI 二进制。
+- Go TUI 的 `Enter` 暂时收敛为当前页面刷新，不再跳出 TUI 调用旧 fzf/CLI 交互，后续动作菜单会在 Go 内部逐项实现。
+- `tui/go/build-tui.sh` 使用项目内 `.cache/go-build` 作为 Go 构建缓存，避免写入用户目录。
+- 已使用本机 Go 构建当前 macOS 开发二进制 `bin/clashctl-tui`，并交叉编译 Linux 测试产物 `bin/clashctl-tui-linux-amd64` 与 `bin/clashctl-tui-linux-386`。
+- `tui/go/build-tui.sh` 已移动到 Go TUI 工程目录，并支持 `local`、`linux-amd64`、`linux-386`、`linux`、`all` 构建目标。

@@ -378,33 +378,6 @@ _node_list_members() {
 #            交互式选择
 ########################################
 
-_node_has_fzf() {
-    command -v fzf >&/dev/null && [ -t 0 ]
-}
-
-_node_hint_fzf() {
-    [ "${_NODE_FZF_HINT_SHOWN:-false}" = true ] && return 0
-    [ -t 0 ] || return 0
-    command -v fzf >&/dev/null && return 0
-
-    _NODE_FZF_HINT_SHOWN=true
-    _okcat '💡' '未检测到 fzf，已使用编号选择；安装 fzf 可启用搜索式选择界面。' >&2
-}
-
-_node_fzf_preview_dir() {
-    mktemp -d "${TMPDIR:-/tmp}/clashnode-preview.XXXXXX" 2>/dev/null
-}
-
-_node_fzf_preview_cmd() {
-    printf '%s' "cat \"\$NODE_FZF_PREVIEW_DIR\"/{1}"
-}
-
-_node_selected_name() {
-    local selected=$1
-    selected=${selected#*$'\t'}
-    printf '%s\n' "${selected%%$'\t'*}"
-}
-
 # 交互选组，选中的组名输出到 stdout，菜单打到 stderr
 # $1: 提示语  $2: 过滤（selector=仅可切换组 / all=全部，默认 all）
 _node_pick_group() {
@@ -438,64 +411,6 @@ _node_pick_group() {
         w=$(_node_dispwidth "${nows[$i]:-—}")
         ((w > noww)) && noww=$w
     done
-
-    if _node_has_fzf; then
-        local selected status preview_dir preview_args=()
-        preview_dir=$(_node_fzf_preview_dir)
-        if [ -n "$preview_dir" ]; then
-            preview_args=(--preview "$(_node_fzf_preview_cmd)" --preview-window='right:45%:wrap')
-            for i in "${!names[@]}"; do
-                {
-                    printf '策略组\n'
-                    printf '  名称：%s\n' "${names[$i]}"
-                    printf '  类型：%s\n' "${types[$i]}"
-                    printf '  当前：%s\n' "${nows[$i]:-—}"
-                    printf '\n节点\n'
-                    local member count=0
-                    while IFS= read -r member; do
-                        [ -z "$member" ] && continue
-                        ((count += 1))
-                        if [ "$member" = "${nows[$i]}" ]; then
-                            printf '  * %s\n' "$member"
-                        else
-                            printf '    %s\n' "$member"
-                        fi
-                        [ "$count" -ge 60 ] && {
-                            printf '    ...\n'
-                            break
-                        }
-                    done < <(_node_members "${names[$i]}")
-                    [ "$count" -gt 0 ] || printf '  —\n'
-                } >"$preview_dir/$((i + 1))"
-            done
-        fi
-        selected=$(
-            for i in "${!names[@]}"; do
-                printf '%s\t%s\t%s → %s  [%s]\n' \
-                    "$((i + 1))" \
-                    "${names[$i]}" \
-                    "$(_node_pad "${names[$i]}" "$namew")" \
-                    "$(_node_pad "${nows[$i]:-—}" "$noww")" \
-                    "${types[$i]}"
-            done | NODE_FZF_PREVIEW_DIR=$preview_dir fzf \
-                --height=80% \
-                --layout=reverse \
-                --border \
-                --delimiter=$'\t' \
-                --with-nth=3 \
-                --prompt="$prompt" \
-                --header='选择策略组，Enter 确认，Esc 退出' \
-                "${preview_args[@]}"
-        )
-        status=$?
-        [ -n "$preview_dir" ] && rm -rf -- "$preview_dir"
-        [ "$status" -eq 0 ] || return 1
-        [ -n "$selected" ] || return 1
-        _node_selected_name "$selected"
-        return 0
-    fi
-
-    _node_hint_fzf
 
     # 与 ls 一致：[序号] 名字 → 当前节点 [type]，按显示宽度对齐
     local tok idxw=${#names[@]}
@@ -539,46 +454,6 @@ _node_pick_proxy() {
         w=$(_node_dispwidth "${names[$i]}")
         ((w > namew)) && namew=$w
     done
-
-    if _node_has_fzf; then
-        local selected status preview_dir preview_args=()
-        preview_dir=$(_node_fzf_preview_dir)
-        if [ -n "$preview_dir" ]; then
-            preview_args=(--preview "$(_node_fzf_preview_cmd)" --preview-window='right:45%:wrap')
-            for i in "${!names[@]}"; do
-                {
-                    printf '节点\n'
-                    printf '  名称：%s\n' "${names[$i]}"
-                    printf '  类型：%s\n' "${types[$i]}"
-                } >"$preview_dir/$((i + 1))"
-            done
-        fi
-        selected=$(
-            for i in "${!names[@]}"; do
-                printf '%s\t%s\t%s  [%s]\n' \
-                    "$((i + 1))" \
-                    "${names[$i]}" \
-                    "$(_node_pad "${names[$i]}" "$namew")" \
-                    "${types[$i]}"
-            done | NODE_FZF_PREVIEW_DIR=$preview_dir fzf \
-                --height=80% \
-                --layout=reverse \
-                --border \
-                --delimiter=$'\t' \
-                --with-nth=3 \
-                --prompt="$prompt" \
-                --header='选择节点，Enter 确认，Esc 退出' \
-                "${preview_args[@]}"
-        )
-        status=$?
-        [ -n "$preview_dir" ] && rm -rf -- "$preview_dir"
-        [ "$status" -eq 0 ] || return 1
-        [ -n "$selected" ] || return 1
-        _node_selected_name "$selected"
-        return 0
-    fi
-
-    _node_hint_fzf
 
     local tok idxw=${#names[@]}
     idxw=${#idxw}
@@ -637,76 +512,6 @@ _node_pick_member() {
             ((w > delayw)) && delayw=$w
         done
     fi
-
-    if _node_has_fzf; then
-        local selected fzf_header='* 表示当前节点；Enter 切换，Esc 退出'
-        [ "$with_delay" = true ] && {
-            fzf_header='* 表示当前节点；Enter 切换，Esc 退出'
-        }
-        declare -A proxy_types=()
-        while IFS=$'\t' read -r name type; do
-            [ -n "$name" ] && proxy_types["$name"]=$type
-        done < <(_node_proxies)
-
-        local status preview_dir preview_args=()
-        preview_dir=$(_node_fzf_preview_dir)
-        if [ -n "$preview_dir" ]; then
-            preview_args=(--preview "$(_node_fzf_preview_cmd)" --preview-window='right:45%:wrap')
-            for i in "${!members[@]}"; do
-                {
-                    printf '节点\n'
-                    printf '  名称：%s\n' "${members[$i]}"
-                    printf '  策略组：%s\n' "$group"
-                    printf '  类型：%s\n' "${proxy_types[${members[$i]}]:-—}"
-                    if [ "${members[$i]}" = "$now" ]; then
-                        printf '  状态：当前选中\n'
-                    else
-                        printf '  状态：可切换\n'
-                    fi
-                    if [ "$with_delay" = true ]; then
-                        delay_label=$(_node_delay_label "${delays[${members[$i]}]:-}")
-                        printf '  延迟：%s\n' "$delay_label"
-                    fi
-                } >"$preview_dir/$((i + 1))"
-            done
-        fi
-
-        selected=$(
-            for i in "${!members[@]}"; do
-                marker=' '
-                [ "${members[$i]}" = "$now" ] && marker='*'
-                if [ "$with_delay" = true ]; then
-                    delay_label=$(_node_delay_label "${delays[${members[$i]}]:-}")
-                    pad=$((delayw - $(_node_dispwidth "$delay_label")))
-                    printf '%s\t%s\t%s %s  %s\n' \
-                        "$((i + 1))" \
-                        "${members[$i]}" \
-                        "$marker" \
-                        "$(_node_pad "${members[$i]}" "$namew")" \
-                        "$(_node_spaces "$pad")$(_node_delay_color "$delay_label")"
-                else
-                    printf '%s\t%s\t%s %s\n' "$((i + 1))" "${members[$i]}" "$marker" "${members[$i]}"
-                fi
-            done | NODE_FZF_PREVIEW_DIR=$preview_dir fzf \
-                --height=80% \
-                --layout=reverse \
-                --border \
-                --ansi \
-                --delimiter=$'\t' \
-                --with-nth=3 \
-                --prompt="${group} > " \
-                --header="$fzf_header" \
-                "${preview_args[@]}"
-        )
-        status=$?
-        [ -n "$preview_dir" ] && rm -rf -- "$preview_dir"
-        [ "$status" -eq 0 ] || return 1
-        [ -n "$selected" ] || return 1
-        _node_selected_name "$selected"
-        return 0
-    fi
-
-    _node_hint_fzf
 
     local marker tok idxw=${#members[@]}
     idxw=${#idxw} # 序号位数；[n] 整体左对齐补齐到 idxw+2，使括号紧凑且名字列对齐

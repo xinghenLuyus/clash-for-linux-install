@@ -1,10 +1,13 @@
 .idea
 .vscode
+.DS_Store
+.cache/
 
 config.yaml*
 
 archives/*
 !archives/dist.zip
+bin/
 
 test.sh
 

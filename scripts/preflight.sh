@@ -268,6 +268,7 @@ install_clashctl() {
     /bin/cp -a "$CLASHCTL_SRC/scripts/lib" "$target_dir/scripts/"
     /bin/cp -a "$CLASHCTL_SRC/scripts/init" "$target_dir/scripts/"
     [ -d "$CLASHCTL_SRC/scripts/tui" ] && /bin/cp -a "$CLASHCTL_SRC/scripts/tui" "$target_dir/scripts/"
+    [ -x "$CLASHCTL_SRC/bin/clashctl-tui" ] && /usr/bin/install -m 755 "$CLASHCTL_SRC/bin/clashctl-tui" "$target_dir/bin/clashctl-tui"
 
     for resource in "$CLASHCTL_SRC"/resources/*; do
         /bin/cp -r "$resource" "$target_dir/resources/"

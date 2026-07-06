@@ -36,6 +36,28 @@ _tui_overview() {
     _tui_status_block
 }
 
+_tui_status_line() {
+    local service_state=stopped api_state=down tun_state=off mode=rule live_json value
+
+    service_is_active >&/dev/null && service_state=running
+    if [ "$service_state" = running ]; then
+        live_json=$(api_configs 2>/dev/null)
+        [ -n "$live_json" ] && api_state=ok
+    fi
+
+    tunstatus >&/dev/null && tun_state=on
+    if [ -n "$live_json" ] && [ -x "$BIN_YQ" ]; then
+        value=$("$BIN_YQ" -p json -r '.mode // ""' <<<"$live_json" 2>/dev/null)
+        [ -n "$value" ] && [ "$value" != null ] && mode=$value
+    fi
+    if [ -z "$value" ] && [ -x "$BIN_YQ" ] && [ -f "$CLASH_CONFIG_RUNTIME" ]; then
+        value=$("$BIN_YQ" -r '.mode // "rule"' "$CLASH_CONFIG_RUNTIME" 2>/dev/null)
+        [ -n "$value" ] && [ "$value" != null ] && mode=$value
+    fi
+
+    printf 'Service:%s | API:%s | TUN:%s | Mode:%s' "$service_state" "$api_state" "$tun_state" "$mode"
+}
+
 _tui_status_block() {
     local service_state api_state tun_state profile secret live_json
     local mode mixed_port http_port socks_port ext allow_lan bind_addr dns_enabled

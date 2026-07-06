@@ -203,22 +203,6 @@ proxy_print_members() {
 
 proxy_pick_group() {
     local selected
-    if command -v fzf >&/dev/null && [ -t 0 ]; then
-        selected=$(proxy_groups_tsv | fzf \
-            --height=100% \
-            --layout=reverse \
-            --border \
-            --delimiter=$'\t' \
-            --with-nth='1,3,2,4' \
-            --prompt='proxies > ' \
-            --header='选择策略组 | Enter 确认 | q/Esc 退出' \
-            --preview='bash -c ". \"$CLASHCTL_HOME/scripts/cmd/clashctl.sh\" && proxy_preview_group \"$1\"" -- {1}' \
-            --preview-window='right:60%:wrap' \
-            --bind='q:abort,esc:abort,ctrl-c:abort') || return
-        printf '%s\n' "${selected%%$'\t'*}"
-        return
-    fi
-
     proxy_print_groups >&2
     printf '%s' "$(_okcat '✈️ ' '请输入策略组名称：')" >&2
     read -r selected
@@ -227,22 +211,6 @@ proxy_pick_group() {
 
 proxy_pick_member() {
     local group=$1 selected
-    if command -v fzf >&/dev/null && [ -t 0 ]; then
-        selected=$(proxy_member_rows "$group" | fzf \
-            --height=100% \
-            --layout=reverse \
-            --border \
-            --delimiter=$'\t' \
-            --with-nth='1,2,3,4,5' \
-            --prompt="$group > " \
-            --header='选择节点 | Enter 切换 | q/Esc 返回' \
-            --preview='bash -c ". \"$CLASHCTL_HOME/scripts/cmd/clashctl.sh\" && proxy_preview_member \"$1\" \"$2\"" -- "$group" {2}' \
-            --preview-window='right:50%:wrap' \
-            --bind='q:abort,esc:abort,ctrl-c:abort') || return
-        printf '%s\n' "$(printf '%s' "$selected" | awk -F '\t' '{print $2}')"
-        return
-    fi
-
     proxy_print_members "$group" >&2
     printf '%s' "$(_okcat '✈️ ' '请输入节点名称：')" >&2
     read -r selected
