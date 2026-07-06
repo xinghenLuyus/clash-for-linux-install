@@ -27,6 +27,15 @@ type app struct {
 	statusCache     string
 	contentCache    string
 	pages           []page
+	modal           *modal
+	toast           string
+}
+
+type modal struct {
+	Title string
+	Label string
+	Value string
+	Error string
 }
 
 type proxyGroup struct {

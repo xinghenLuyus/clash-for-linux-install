@@ -64,21 +64,23 @@ func readPendingEscBytes(r *bufio.Reader) []byte {
 
 func (a *app) prompt(label string) (string, bool) {
 	value := ""
+	a.modal = &modal{Title: "输入", Label: label}
+	defer func() {
+		a.modal = nil
+		a.message = ""
+	}()
 	for {
-		a.message = label + ": " + value
+		a.modal.Value = value
 		a.render()
 		b := make([]byte, 1)
 		_, err := os.Stdin.Read(b)
 		if err != nil {
-			a.message = ""
 			return "", false
 		}
 		switch b[0] {
 		case 3, 27:
-			a.message = ""
 			return "", false
 		case 13, 10:
-			a.message = ""
 			return value, true
 		case 127, 8:
 			rs := []rune(value)

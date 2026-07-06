@@ -54,5 +54,43 @@ func (a *app) render() {
 	}
 	b.WriteString(ui.Invert(ui.Pad(footer, a.width)))
 	b.WriteString("\033[K")
+	if a.modal != nil {
+		a.renderModal(&b)
+	}
 	fmt.Print(b.String())
+}
+
+func (a *app) renderModal(b *strings.Builder) {
+	w := a.width * 3 / 5
+	if w < 52 {
+		w = 52
+	}
+	if w > a.width-8 {
+		w = a.width - 8
+	}
+	h := 9
+	x := (a.width - w) / 2
+	y := (a.height - h) / 2
+	if x < 1 {
+		x = 1
+	}
+	if y < 2 {
+		y = 2
+	}
+	line := func(row int, text string) {
+		b.WriteString(fmt.Sprintf("\033[%d;%dH", y+row, x+1))
+		b.WriteString(ui.Invert(ui.Pad(text, w)))
+	}
+	line(0, "┌"+strings.Repeat("─", w-2)+"┐")
+	line(1, "│ "+ui.Pad(a.modal.Title, w-4)+" │")
+	line(2, "├"+strings.Repeat("─", w-2)+"┤")
+	line(3, "│ "+ui.Pad(a.modal.Label, w-4)+" │")
+	line(4, "│ "+ui.Pad(a.modal.Value, w-4)+" │")
+	errText := a.modal.Error
+	if errText == "" {
+		errText = "Enter 确认   Esc 取消"
+	}
+	line(5, "│ "+ui.Pad(errText, w-4)+" │")
+	line(6, "│ "+ui.Pad("", w-4)+" │")
+	line(7, "└"+strings.Repeat("─", w-2)+"┘")
 }

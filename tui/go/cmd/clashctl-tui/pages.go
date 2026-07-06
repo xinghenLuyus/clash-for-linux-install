@@ -8,31 +8,26 @@ import (
 )
 
 func (a *app) pageContent(key string) string {
-	if a.focused {
-		switch key {
-		case "proxies":
-			return a.proxiesPage()
-		case "profiles":
-			return a.profilesPage()
-		case "settings":
-			return a.settingsPage()
-		}
-		return a.subPageContent(key)
-	}
 	switch key {
 	case "overview":
 		return a.capture("_tui_status_block")
 	case "profiles":
-		return a.capture("_tui_profiles_block")
+		return a.profilesPage()
 	case "proxies":
-		return a.capture("_tui_proxies_block")
+		return a.proxiesPage()
 	case "logs":
 		return a.logsPreview()
 	case "settings":
-		return a.capture("_tui_settings_block")
+		return a.settingsPage()
 	case "core":
+		if a.focused {
+			return a.subPageContent(key)
+		}
 		return a.capture("_tui_core_block")
 	case "webui":
+		if a.focused {
+			return a.subPageContent(key)
+		}
 		return a.capture("_tui_webui_block")
 	default:
 		return ""
@@ -106,7 +101,7 @@ func (a *app) profilesPage() string {
 	b.WriteString("订阅\n\n")
 	if len(a.profiles) == 0 {
 		b.WriteString("暂无订阅。\n\n")
-		b.WriteString("a 新增订阅\n")
+		b.WriteString("按 a 新增订阅。新增完成后会在这里显示结果。\n")
 		return b.String()
 	}
 	for i, p := range a.profiles {

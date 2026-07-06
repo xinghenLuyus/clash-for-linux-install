@@ -64,34 +64,26 @@ func (a *app) run() error {
 			if a.handlePageMove(-1) {
 				break
 			}
-			if a.focused {
-				if a.subSelected > 0 {
-					a.subSelected--
-					a.message = ""
-					a.actionOutput = ""
-					a.refresh(false)
-				}
-			} else if a.selected > 0 {
+			if !a.focused && a.selected > 0 {
 				a.selected--
 				a.message = ""
 				a.subSelected = 0
+				a.proxyMember = false
+				a.proxyGroupIndex = 0
+				a.actionOutput = ""
 				a.refresh(false)
 			}
 		case "down":
 			if a.handlePageMove(1) {
 				break
 			}
-			if a.focused {
-				if a.subSelected < len(a.currentPage().items)-1 {
-					a.subSelected++
-					a.message = ""
-					a.actionOutput = ""
-					a.refresh(false)
-				}
-			} else if a.selected < len(a.pages)-1 {
+			if !a.focused && a.selected < len(a.pages)-1 {
 				a.selected++
 				a.message = ""
 				a.subSelected = 0
+				a.proxyMember = false
+				a.proxyGroupIndex = 0
+				a.actionOutput = ""
 				a.refresh(false)
 			}
 		case "left":
@@ -194,9 +186,18 @@ func (a *app) leavePage() {
 
 func (a *app) footer() string {
 	if a.focused {
-		return "←/Esc 返回 | ↑↓ 选择子项 | Enter 刷新当前子页 | r 刷新 | q 退出"
+		switch a.currentPage().key {
+		case "proxies":
+			return "← 返回导航/策略组 | → 进入节点 | ↑↓ 选择 | Enter 切换 | d/D 测速 | r 刷新 | q 退出"
+		case "profiles":
+			return "← 返回导航 | ↑↓ 选择 | Enter 使用 | a 新增 | u 更新 | x 删除 | r 刷新 | q 退出"
+		case "settings":
+			return "← 返回导航 | ↑↓ 选择 | Enter 执行/切换 | r 刷新 | q 退出"
+		default:
+			return "←/Esc 返回导航 | ↑↓ 选择 | Enter 执行 | r 刷新 | q 退出"
+		}
 	}
-	return a.currentPage().footer
+	return "↑↓ 选择页面 | →/Enter 操作页面 | r 刷新 | q 退出"
 }
 
 func (a *app) currentItem() string {
