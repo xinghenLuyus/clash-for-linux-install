@@ -20,11 +20,14 @@ type page struct {
 	title  string
 	desc   string
 	footer string
+	items  []string
 }
 
 type app struct {
 	home         string
 	selected     int
+	focused      bool
+	subSelected  int
 	width        int
 	height       int
 	lastWidth    int
@@ -57,13 +60,13 @@ func newApp() *app {
 	return &app{
 		home: home,
 		pages: []page{
-			{"overview", "Overview", "live status, drift, recent logs", "Enter refresh | arrows switch | r refresh | q quit"},
-			{"profiles", "Profiles", "subscriptions and active profile", "Enter actions | arrows switch | r refresh | q quit"},
-			{"proxies", "Proxies", "proxy groups, nodes, delay and select", "Enter node actions | arrows switch | r refresh | q quit"},
-			{"logs", "Logs", "recent kernel logs", "Enter tail log | arrows switch | r refresh | q quit"},
-			{"settings", "Settings", "proxy env, TUN, secret, mixin", "Enter actions | arrows switch | r refresh | q quit"},
-			{"core", "Core", "service, status, upgrade", "Enter actions | arrows switch | r refresh | q quit"},
-			{"webui", "Web UI", "dashboard addresses", "Enter show addresses | arrows switch | r refresh | q quit"},
+			{"overview", "总览", "运行状态、配置偏差、关键摘要", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"运行状态", "配置偏差", "关键路径"}},
+			{"profiles", "订阅", "订阅列表、启用配置、更新记录", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"订阅列表", "当前订阅", "订阅操作"}},
+			{"proxies", "代理", "策略组、节点、延迟与切换", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"策略组", "节点列表", "延迟测试"}},
+			{"logs", "日志", "内核日志快速预览", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"最近日志", "日志文件", "订阅日志"}},
+			{"settings", "设置", "代理环境、TUN、Secret、Mixin", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"代理环境", "TUN 模式", "Secret 与 Mixin"}},
+			{"core", "内核", "服务状态、启动停止、升级", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"服务状态", "服务操作", "内核升级"}},
+			{"webui", "Web 面板", "控制台地址与访问方式", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"访问地址", "Secret", "说明"}},
 		},
 	}
 }
@@ -88,34 +91,44 @@ func (a *app) run() error {
 		}
 		switch key {
 		case "q", "ctrl-c", "esc":
+			if a.focused && key == "esc" {
+				a.leavePage()
+				break
+			}
 			return nil
 		case "up":
-			if a.selected > 0 {
+			if a.focused {
+				if a.subSelected > 0 {
+					a.subSelected--
+					a.message = ""
+					a.refresh(false)
+				}
+			} else if a.selected > 0 {
 				a.selected--
 				a.message = ""
+				a.subSelected = 0
 				a.refresh(false)
 			}
 		case "down":
-			if a.selected < len(a.pages)-1 {
+			if a.focused {
+				if a.subSelected < len(a.currentPage().items)-1 {
+					a.subSelected++
+					a.message = ""
+					a.refresh(false)
+				}
+			} else if a.selected < len(a.pages)-1 {
 				a.selected++
 				a.message = ""
+				a.subSelected = 0
 				a.refresh(false)
 			}
 		case "left":
-			if a.selected > 0 {
-				a.selected--
-				a.message = ""
-				a.refresh(false)
-			}
+			a.leavePage()
 		case "right":
-			if a.selected < len(a.pages)-1 {
-				a.selected++
-				a.message = ""
-				a.refresh(false)
-			}
+			a.enterPage()
 		case "r":
 			a.refresh(true)
-			a.message = "refreshed"
+			a.message = "已刷新"
 		case "enter":
 			a.handleEnter()
 		}
@@ -221,6 +234,9 @@ func (a *app) render() {
 				prefix = "> "
 			}
 			left = prefix + p.title
+			if a.focused && row == a.selected {
+				left += " >"
+			}
 		}
 		right := ""
 		if row < len(content) {
@@ -231,7 +247,7 @@ func (a *app) render() {
 		b.WriteString(pad(right, rightW))
 		b.WriteString("\033[K\r\n")
 	}
-	footer := a.pages[a.selected].footer
+	footer := a.footer()
 	if a.message != "" {
 		footer += " | " + a.message
 	}
@@ -242,9 +258,13 @@ func (a *app) render() {
 
 func (a *app) refresh(includeStatus bool) {
 	if includeStatus || a.statusCache == "" {
-		a.statusCache = fmt.Sprintf(" clashctl TUI | %s | %s ", a.kernel(), oneLine(a.capture("_tui_status_line")))
+		a.statusCache = fmt.Sprintf(" clashctl TUI | 内核:%s | %s ", a.kernel(), localizeStatus(oneLine(a.capture("_tui_status_line"))))
 	}
 	a.contentCache = a.pageContent(a.pages[a.selected].key)
+}
+
+func (a *app) currentPage() page {
+	return a.pages[a.selected]
 }
 
 func (a *app) kernel() string {
@@ -265,6 +285,9 @@ func (a *app) kernel() string {
 }
 
 func (a *app) pageContent(key string) string {
+	if a.focused {
+		return a.subPageContent(key)
+	}
 	switch key {
 	case "overview":
 		return a.capture("_tui_status_block")
@@ -273,7 +296,7 @@ func (a *app) pageContent(key string) string {
 	case "proxies":
 		return a.capture("_tui_proxies_block")
 	case "logs":
-		return a.capture("_tui_logs_block")
+		return a.logsPreview()
 	case "settings":
 		return a.capture("_tui_settings_block")
 	case "core":
@@ -286,29 +309,84 @@ func (a *app) pageContent(key string) string {
 }
 
 func (a *app) handleEnter() {
-	key := a.pages[a.selected].key
+	if !a.focused {
+		a.enterPage()
+		return
+	}
+	a.refresh(true)
+	a.message = fmt.Sprintf("已刷新：%s", a.currentItem())
+}
+
+func (a *app) enterPage() {
+	if a.focused {
+		a.refresh(true)
+		return
+	}
+	a.focused = true
+	a.subSelected = 0
+	a.message = ""
+	a.refresh(true)
+}
+
+func (a *app) leavePage() {
+	if !a.focused {
+		return
+	}
+	a.focused = false
+	a.message = ""
+	a.refresh(false)
+}
+
+func (a *app) footer() string {
+	if a.focused {
+		return "←/Esc 返回 | ↑↓ 选择子项 | Enter 刷新当前子页 | r 刷新 | q 退出"
+	}
+	return a.currentPage().footer
+}
+
+func (a *app) currentItem() string {
+	items := a.currentPage().items
+	if len(items) == 0 || a.subSelected >= len(items) {
+		return ""
+	}
+	return items[a.subSelected]
+}
+
+func (a *app) subPageContent(key string) string {
+	var b strings.Builder
+	p := a.currentPage()
+	b.WriteString(p.title)
+	b.WriteString(" / ")
+	b.WriteString(a.currentItem())
+	b.WriteString("\n\n")
+	for i, item := range p.items {
+		prefix := "  "
+		if i == a.subSelected {
+			prefix = "> "
+		}
+		b.WriteString(prefix)
+		b.WriteString(item)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+
 	switch key {
 	case "overview":
-		a.refresh(true)
-		a.message = "overview refreshed"
-	case "proxies":
-		a.refresh(true)
-		a.message = "proxies refreshed"
+		return b.String() + a.capture("_tui_status_block")
 	case "profiles":
-		a.refresh(true)
-		a.message = "profiles refreshed"
+		return b.String() + a.capture("_tui_profiles_block")
+	case "proxies":
+		return b.String() + a.capture("_tui_proxies_block")
 	case "logs":
-		a.refresh(true)
-		a.message = "logs refreshed"
+		return b.String() + a.logsPreview()
 	case "settings":
-		a.refresh(true)
-		a.message = "settings refreshed"
+		return b.String() + a.capture("_tui_settings_block")
 	case "core":
-		a.refresh(true)
-		a.message = "core refreshed"
+		return b.String() + a.capture("_tui_core_block")
 	case "webui":
-		a.refresh(true)
-		a.message = "web ui refreshed"
+		return b.String() + a.capture("_tui_webui_block")
+	default:
+		return b.String()
 	}
 }
 
@@ -322,6 +400,77 @@ func (a *app) capture(fn string) string {
 		return err.Error()
 	}
 	return out.String()
+}
+
+func (a *app) logsPreview() string {
+	logPath := a.logPath()
+	if logPath == "" {
+		return "最近日志\n\n未找到日志路径。"
+	}
+	lines, err := readTailLines(logPath, 128*1024, 160)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Sprintf("最近日志\n\n日志文件：%s\n暂无日志文件。服务启动后会自动生成。", logPath)
+		}
+		return fmt.Sprintf("最近日志\n\n日志文件：%s\n读取失败：%v", logPath, err)
+	}
+	if len(lines) == 0 {
+		return fmt.Sprintf("最近日志\n\n日志文件：%s\n暂无日志。", logPath)
+	}
+	return fmt.Sprintf("最近日志\n日志文件：%s\n\n%s", logPath, strings.Join(lines, "\n"))
+}
+
+func (a *app) logPath() string {
+	kernel := a.kernel()
+	resources := filepath.Join(a.home, "resources")
+	candidates := []string{
+		filepath.Join(resources, kernel+".log"),
+		filepath.Join("/var/log", kernel+".log"),
+	}
+	for _, p := range candidates {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+	}
+	return candidates[0]
+}
+
+func readTailLines(path string, maxBytes int64, maxLines int) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	size := st.Size()
+	start := int64(0)
+	if size > maxBytes {
+		start = size - maxBytes
+	}
+	if _, err := f.Seek(start, 0); err != nil {
+		return nil, err
+	}
+	buf := make([]byte, size-start)
+	n, err := f.Read(buf)
+	if err != nil && n == 0 {
+		return nil, err
+	}
+	text := strings.TrimRight(string(buf[:n]), "\n")
+	if text == "" {
+		return nil, nil
+	}
+	lines := strings.Split(text, "\n")
+	if start > 0 && len(lines) > 0 {
+		lines = lines[1:]
+	}
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	return lines, nil
 }
 
 func pad(s string, width int) string {
@@ -359,6 +508,22 @@ func oneLine(s string) string {
 		}
 	}
 	return "Service:unknown"
+}
+
+func localizeStatus(s string) string {
+	replacer := strings.NewReplacer(
+		"Service:", "服务:",
+		"API:", "API:",
+		"TUN:", "TUN:",
+		"Mode:", "模式:",
+		"running", "运行中",
+		"stopped", "已停止",
+		"ok", "正常",
+		"down", "异常",
+		"on", "开启",
+		"off", "关闭",
+	)
+	return replacer.Replace(s)
 }
 
 func invert(s string) string { return "\033[7m" + s + "\033[0m" }

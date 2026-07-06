@@ -96,3 +96,8 @@
   - `clashctl-tui-linux-386`
   - Ubuntu 无法访问 `proxy.golang.org` 时，可直接使用 git 中的预编译产物，无需本机下载 Go module。
 - 安装流程会按当前 Linux 架构优先复制 `tui/go/dist/clashctl-tui-linux-*` 到 `$CLASHCTL_HOME/bin/clashctl-tui`。
+- Go TUI 交互体验增强：
+  - 顶层页面全局汉化为总览、订阅、代理、日志、设置、内核、Web 面板。
+  - `→` / `Enter` 进入右侧子页面，`←` / `Esc` 返回顶层，形成类似 BIOS 的左右层级体验。
+  - 子页面在右侧内容区内展示，不再跳出 TUI。
+  - 日志页改为 Go 直接读取日志文件尾部，默认最多读取 128KB / 160 行，避免调用慢速 shell 日志命令。
