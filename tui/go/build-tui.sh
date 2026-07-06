@@ -6,6 +6,7 @@ ROOT="$(cd -- "${MODULE_DIR}/../.." && pwd -P)"
 OUT="${ROOT}/bin/clashctl-tui"
 GO_BIN="${GO_BIN:-}"
 export GOCACHE="${GOCACHE:-${ROOT}/.cache/go-build}"
+export GOMODCACHE="${GOMODCACHE:-${ROOT}/.cache/go-mod}"
 TARGET="${1:-local}"
 
 if [ -z "$GO_BIN" ]; then
@@ -20,7 +21,7 @@ if [ -z "$GO_BIN" ]; then
     exit 1
 fi
 
-mkdir -p "${ROOT}/bin" "$GOCACHE"
+mkdir -p "${ROOT}/bin" "$GOCACHE" "$GOMODCACHE"
 
 build_one() {
     local goos=$1 goarch=$2 out=$3

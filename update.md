@@ -87,3 +87,7 @@
   - 渲染过程不再执行 Clash/shell 查询。
   - 普通刷新不再整屏清空，改为回到左上角逐行覆盖并清理行尾。
   - 单次渲染改为先组装 buffer 再一次性写入终端，减少终端重绘撕裂。
+- 进一步按 Go 官方推荐改造终端控制：
+  - 使用 `golang.org/x/term` 的 `MakeRaw` / `Restore` / `GetSize` 替代 shell `stty`。
+  - 增加 CJK/emoji 等宽字符列宽计算，避免中文内容在 Ubuntu 终端中被错误补齐后自动换行。
+  - 构建脚本新增项目内 `.cache/go-mod` 模块缓存，避免写入用户目录。

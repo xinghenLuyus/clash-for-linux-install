@@ -8,10 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/term"
 )
 
 type page struct {
@@ -68,12 +69,13 @@ func newApp() *app {
 }
 
 func (a *app) run() error {
-	if err := shell("stty", "raw", "-echo", "min", "1", "time", "0"); err != nil {
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
 		return fmt.Errorf("failed to enter raw terminal mode: %w", err)
 	}
-	defer shell("stty", "sane")
-	fmt.Print("\033[?1049h\033[?25l")
-	defer fmt.Print("\033[?25h\033[?1049l")
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+	fmt.Print("\033[?1049h\033[?25l\033[?7l")
+	defer fmt.Print("\033[?7h\033[?25h\033[?1049l")
 
 	a.resize()
 	a.refresh(true)
@@ -177,20 +179,11 @@ func readPendingEscBytes(r *bufio.Reader) []byte {
 }
 
 func (a *app) resize() {
-	cmd := exec.Command("stty", "size")
-	cmd.Stdin = os.Stdin
-	out, err := cmd.Output()
+	w, h, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
 		a.width, a.height = 100, 30
 		return
 	}
-	fields := strings.Fields(string(out))
-	if len(fields) != 2 {
-		a.width, a.height = 100, 30
-		return
-	}
-	h, _ := strconv.Atoi(fields[0])
-	w, _ := strconv.Atoi(fields[1])
 	if w < 80 {
 		w = 80
 	}
@@ -228,9 +221,6 @@ func (a *app) render() {
 				prefix = "> "
 			}
 			left = prefix + p.title
-			if row == a.selected {
-				left = cyan(left)
-			}
 		}
 		right := ""
 		if row < len(content) {
@@ -334,63 +324,29 @@ func (a *app) capture(fn string) string {
 	return out.String()
 }
 
-func (a *app) runShell(fn string) {
-	fmt.Print("\033[?25h\033[?1049l")
-	_ = shell("stty", "sane")
-	cmd := exec.Command("bash", "-lc", fmt.Sprintf(". %q/scripts/cmd/clashctl.sh; %s", a.home, fn))
-	cmd.Env = append(os.Environ(), "CLASHCTL_HOME="+a.home)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	fmt.Print("\nPress Enter to return to clashctl TUI...")
-	_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
-	_ = shell("stty", "raw", "-echo", "min", "1", "time", "0")
-	fmt.Print("\033[?1049h\033[?25l")
-	if err != nil {
-		a.message = err.Error()
-	} else {
-		a.message = "done"
-	}
-}
-
-func shell(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
 func pad(s string, width int) string {
-	rs := []rune(stripANSI(s))
-	if len(rs) >= width {
-		return string([]rune(s)[:minRuneLen(s, width)])
+	s = trimToWidth(s, width)
+	w := displayWidth(s)
+	if w >= width {
+		return s
 	}
-	return s + strings.Repeat(" ", width-len(rs))
-}
-
-func minRuneLen(s string, width int) int {
-	rs := []rune(s)
-	if len(rs) < width {
-		return len(rs)
-	}
-	return width
+	return s + strings.Repeat(" ", width-w)
 }
 
 func wrapLines(s string, width int) []string {
 	var lines []string
 	for _, line := range strings.Split(strings.TrimRight(s, "\n"), "\n") {
-		rs := []rune(line)
-		if len(rs) == 0 {
+		line = stripANSI(line)
+		if line == "" {
 			lines = append(lines, "")
 			continue
 		}
-		for len(rs) > width {
-			lines = append(lines, string(rs[:width]))
-			rs = rs[width:]
+		for displayWidth(line) > width {
+			head, tail := splitByWidth(line, width)
+			lines = append(lines, head)
+			line = tail
 		}
-		lines = append(lines, string(rs))
+		lines = append(lines, line)
 	}
 	return lines
 }
@@ -406,7 +362,6 @@ func oneLine(s string) string {
 }
 
 func invert(s string) string { return "\033[7m" + s + "\033[0m" }
-func cyan(s string) string   { return "\033[36m" + s + "\033[0m" }
 
 func stripANSI(s string) string {
 	var out []rune
@@ -425,4 +380,72 @@ func stripANSI(s string) string {
 		out = append(out, r)
 	}
 	return string(out)
+}
+
+func trimToWidth(s string, width int) string {
+	head, _ := splitByWidth(stripANSI(s), width)
+	return head
+}
+
+func splitByWidth(s string, width int) (string, string) {
+	if width <= 0 {
+		return "", s
+	}
+	var b strings.Builder
+	used := 0
+	for i, r := range s {
+		rw := runeWidth(r)
+		if used+rw > width {
+			return b.String(), s[i:]
+		}
+		b.WriteRune(r)
+		used += rw
+	}
+	return b.String(), ""
+}
+
+func displayWidth(s string) int {
+	width := 0
+	for _, r := range stripANSI(s) {
+		width += runeWidth(r)
+	}
+	return width
+}
+
+func runeWidth(r rune) int {
+	if r == 0 {
+		return 0
+	}
+	if r < 32 || (r >= 0x7f && r < 0xa0) {
+		return 0
+	}
+	if isCombining(r) {
+		return 0
+	}
+	if isWide(r) {
+		return 2
+	}
+	return 1
+}
+
+func isCombining(r rune) bool {
+	return (r >= 0x0300 && r <= 0x036f) ||
+		(r >= 0x1ab0 && r <= 0x1aff) ||
+		(r >= 0x1dc0 && r <= 0x1dff) ||
+		(r >= 0x20d0 && r <= 0x20ff) ||
+		(r >= 0xfe20 && r <= 0xfe2f)
+}
+
+func isWide(r rune) bool {
+	return (r >= 0x1100 && r <= 0x115f) ||
+		r == 0x2329 || r == 0x232a ||
+		(r >= 0x2e80 && r <= 0xa4cf) ||
+		(r >= 0xac00 && r <= 0xd7a3) ||
+		(r >= 0xf900 && r <= 0xfaff) ||
+		(r >= 0xfe10 && r <= 0xfe19) ||
+		(r >= 0xfe30 && r <= 0xfe6f) ||
+		(r >= 0xff00 && r <= 0xff60) ||
+		(r >= 0xffe0 && r <= 0xffe6) ||
+		(r >= 0x1f300 && r <= 0x1faff) ||
+		(r >= 0x20000 && r <= 0x3fffd)
 }
