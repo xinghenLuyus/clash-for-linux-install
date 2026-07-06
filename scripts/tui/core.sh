@@ -27,50 +27,8 @@ Keys:
 EOF
 }
 
-_tui_menu() {
-    printf 'overview\t总览\n'
-    printf 'profiles\t订阅配置\n'
-    printf 'proxies\t策略组与节点\n'
-    printf 'tun\tTUN 模式\n'
-    printf 'logs\t日志\n'
-    printf 'mixin\tMixin 配置\n'
-    printf 'webui\tWeb 控制台\n'
-    printf 'core\t内核与服务\n'
-    printf 'settings\t设置\n'
-}
-
-_tui_fzf() {
-    fzf \
-        --height=100% \
-        --layout=reverse \
-        --border \
-        --ansi \
-        --cycle \
-        --delimiter=$'\t' \
-        --with-nth=2 \
-        --prompt='clashctl > ' \
-        --header='Enter 执行 | Ctrl-R 刷新 | q/Esc/Ctrl-C 退出' \
-        --preview='bash -c ". \"$CLASHCTL_HOME/scripts/cmd/clashctl.sh\" && _tui_preview \"$1\"" -- {1}' \
-        --preview-window='right:60%:wrap' \
-        --bind='q:abort,esc:abort,ctrl-c:abort,ctrl-r:reload(bash -c ". \"$CLASHCTL_HOME/scripts/cmd/clashctl.sh\" && _tui_menu")'
-}
-
 _tui_main() {
-    _tui_require_fzf || return
-    export CLASHCTL_HOME
-
-    local selected key
-    while true; do
-        selected=$(_tui_menu | _tui_fzf) || break
-        key=${selected%%$'\t'*}
-        [ -n "$key" ] || continue
-        _tui_action "$key"
-        printf '\n'
-        printf '按 Enter 返回 TUI，或按 q 后 Enter 退出：'
-        local choice
-        read -r choice
-        [ "$choice" = q ] && break
-    done
+    _tui_app_main "$@"
 }
 
 _tui_install_prompt() {

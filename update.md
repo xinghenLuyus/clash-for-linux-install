@@ -52,3 +52,8 @@
   - 新增 `scripts/tui/overview.sh`，Overview 优先展示 live API 状态；服务未运行或 API 不可用时回退展示 `runtime.yaml`。
   - 当 live 配置与 `runtime.yaml` 不一致时，仅在 TUI 中提示字段差异，不自动覆盖任何配置。
   - Drift 提示用于解释 Web UI 或外部 API 临时修改运行态后，重启/切订阅/重新合并会回到 `mixin.yaml/runtime.yaml` 的权威配置链路。
+- 新增 fzf app shell：
+  - 新增 `scripts/tui/frame.sh`，统一页面路由、顶部状态标题、右侧 preview 和动态操作提示。
+  - 新增 `scripts/tui/app.sh`，作为常驻式 TUI 主循环。
+  - `clashui` / `clashctl tui` 现在进入统一页面导航；页面操作结束后回到 TUI，不再额外要求手动确认返回。
+  - 主界面按 Clash Verge-like 信息架构组织为 Overview / Profiles / Proxies / Logs / Settings / Core / Web UI。
