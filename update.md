@@ -82,3 +82,8 @@
 - `tui/go/build-tui.sh` 使用项目内 `.cache/go-build` 作为 Go 构建缓存，避免写入用户目录。
 - 已使用本机 Go 构建当前 macOS 开发二进制 `bin/clashctl-tui`，并交叉编译 Linux 测试产物 `bin/clashctl-tui-linux-amd64` 与 `bin/clashctl-tui-linux-386`。
 - `tui/go/build-tui.sh` 已移动到 Go TUI 工程目录，并支持 `local`、`linux-amd64`、`linux-386`、`linux`、`all` 构建目标。
+- 修复 Ubuntu 终端中 TUI 顶部栏与内容区频闪：
+  - 页面内容与状态栏改为缓存，只在启动、切页、手动刷新时重新拉取 shell 服务函数。
+  - 渲染过程不再执行 Clash/shell 查询。
+  - 普通刷新不再整屏清空，改为回到左上角逐行覆盖并清理行尾。
+  - 单次渲染改为先组装 buffer 再一次性写入终端，减少终端重绘撕裂。

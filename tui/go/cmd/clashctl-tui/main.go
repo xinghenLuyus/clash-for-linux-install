@@ -22,12 +22,16 @@ type page struct {
 }
 
 type app struct {
-	home     string
-	selected int
-	width    int
-	height   int
-	message  string
-	pages    []page
+	home         string
+	selected     int
+	width        int
+	height       int
+	lastWidth    int
+	lastHeight   int
+	message      string
+	statusCache  string
+	contentCache string
+	pages        []page
 }
 
 func main() {
@@ -72,6 +76,7 @@ func (a *app) run() error {
 	defer fmt.Print("\033[?25h\033[?1049l")
 
 	a.resize()
+	a.refresh(true)
 	a.render()
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -85,20 +90,29 @@ func (a *app) run() error {
 		case "up":
 			if a.selected > 0 {
 				a.selected--
+				a.message = ""
+				a.refresh(false)
 			}
 		case "down":
 			if a.selected < len(a.pages)-1 {
 				a.selected++
+				a.message = ""
+				a.refresh(false)
 			}
 		case "left":
 			if a.selected > 0 {
 				a.selected--
+				a.message = ""
+				a.refresh(false)
 			}
 		case "right":
 			if a.selected < len(a.pages)-1 {
 				a.selected++
+				a.message = ""
+				a.refresh(false)
 			}
 		case "r":
+			a.refresh(true)
 			a.message = "refreshed"
 		case "enter":
 			a.handleEnter()
@@ -187,13 +201,24 @@ func (a *app) resize() {
 }
 
 func (a *app) render() {
-	fmt.Print("\033[H\033[2J")
-	top := a.statusLine()
-	fmt.Print(invert(pad(top, a.width)) + "\r\n")
+	var b strings.Builder
+	b.Grow(a.width * a.height)
+	if a.width != a.lastWidth || a.height != a.lastHeight {
+		b.WriteString("\033[2J")
+		a.lastWidth = a.width
+		a.lastHeight = a.height
+	}
+	b.WriteString("\033[H")
+	top := a.statusCache
+	if top == "" {
+		top = " clashctl TUI | loading "
+	}
+	b.WriteString(invert(pad(top, a.width)))
+	b.WriteString("\033[K\r\n")
 	leftW := 24
 	rightW := a.width - leftW - 3
 	bodyH := a.height - 3
-	content := wrapLines(a.pageContent(a.pages[a.selected].key), rightW)
+	content := wrapLines(a.contentCache, rightW)
 	for row := 0; row < bodyH; row++ {
 		left := ""
 		if row < len(a.pages) {
@@ -211,17 +236,25 @@ func (a *app) render() {
 		if row < len(content) {
 			right = content[row]
 		}
-		fmt.Printf("%s │ %s\r\n", pad(left, leftW), pad(right, rightW))
+		b.WriteString(pad(left, leftW))
+		b.WriteString(" │ ")
+		b.WriteString(pad(right, rightW))
+		b.WriteString("\033[K\r\n")
 	}
 	footer := a.pages[a.selected].footer
 	if a.message != "" {
 		footer += " | " + a.message
 	}
-	fmt.Print(invert(pad(footer, a.width)) + "\r\n")
+	b.WriteString(invert(pad(footer, a.width)))
+	b.WriteString("\033[K")
+	fmt.Print(b.String())
 }
 
-func (a *app) statusLine() string {
-	return fmt.Sprintf(" clashctl TUI | %s | %s ", a.kernel(), oneLine(a.capture("_tui_status_line")))
+func (a *app) refresh(includeStatus bool) {
+	if includeStatus || a.statusCache == "" {
+		a.statusCache = fmt.Sprintf(" clashctl TUI | %s | %s ", a.kernel(), oneLine(a.capture("_tui_status_line")))
+	}
+	a.contentCache = a.pageContent(a.pages[a.selected].key)
 }
 
 func (a *app) kernel() string {
@@ -266,18 +299,25 @@ func (a *app) handleEnter() {
 	key := a.pages[a.selected].key
 	switch key {
 	case "overview":
+		a.refresh(true)
 		a.message = "overview refreshed"
 	case "proxies":
+		a.refresh(true)
 		a.message = "proxies refreshed"
 	case "profiles":
+		a.refresh(true)
 		a.message = "profiles refreshed"
 	case "logs":
+		a.refresh(true)
 		a.message = "logs refreshed"
 	case "settings":
+		a.refresh(true)
 		a.message = "settings refreshed"
 	case "core":
+		a.refresh(true)
 		a.message = "core refreshed"
 	case "webui":
+		a.refresh(true)
 		a.message = "web ui refreshed"
 	}
 }
