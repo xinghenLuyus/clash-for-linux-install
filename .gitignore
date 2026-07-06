@@ -7,5 +7,7 @@ archives/*
 !archives/dist.zip
 
 test.sh
+bin/
+.cache/
 
 !.gitkeep
