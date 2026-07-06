@@ -88,7 +88,14 @@ _download_raw_config() {
     local dest=$1
     local url=$2
 
-    curl \
+    local proxy_env_prefix=()
+    _sub_dead_local_proxy_env && {
+        _failcat '🧭' '检测到当前终端代理指向本机，但内核服务已停止；本次订阅下载将临时直连。'
+        proxy_env_prefix=(env -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY -u all_proxy -u ALL_PROXY -u no_proxy -u NO_PROXY)
+    }
+    [ ${#proxy_env_prefix[@]} -eq 0 ] && proxy_env_prefix=(env)
+
+    "${proxy_env_prefix[@]}" curl \
         --silent \
         --show-error \
         --fail \
@@ -99,7 +106,7 @@ _download_raw_config() {
         --user-agent "$CLASHCTL_SUB_UA" \
         --output "$dest" \
         "$url" ||
-        wget \
+        "${proxy_env_prefix[@]}" wget \
             --no-verbose \
             --no-check-certificate \
             --timeout "$CLASHCTL_SUB_TIMEOUT" \
@@ -107,6 +114,23 @@ _download_raw_config() {
             --user-agent "$CLASHCTL_SUB_UA" \
             --output-document "$dest" \
             "$url"
+}
+
+_sub_dead_local_proxy_env() {
+    service_is_active >/dev/null 2>&1 && return 1
+
+    local v value lower
+    for v in http_proxy HTTP_PROXY https_proxy HTTPS_PROXY all_proxy ALL_PROXY; do
+        value=${!v}
+        [ -z "$value" ] && continue
+        lower=$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')
+        case "$lower" in
+        *://127.0.0.1:* | *://localhost:* | *://\[::1\]:* | 127.0.0.1:* | localhost:* | \[::1\]:*)
+            return 0
+            ;;
+        esac
+    done
+    return 1
 }
 
 _download_convert_config() {
@@ -122,6 +146,7 @@ _download_convert_config() {
         local target='clash'
         local base_url="http://127.0.0.1:${BIN_SUBCONVERTER_PORT}/sub"
         curl \
+            --noproxy '*' \
             --get \
             --silent \
             --show-error \
@@ -132,7 +157,7 @@ _download_convert_config() {
             --write-out '%{url_effective}' \
             "$base_url"
     )
-    curl --user-agent "$CLASHCTL_SUB_UA" --silent --output "$dest" "$convert_url"
+    curl --noproxy '*' --user-agent "$CLASHCTL_SUB_UA" --silent --output "$dest" "$convert_url"
     flag=$?
     _stop_convert
     return $flag
@@ -153,13 +178,13 @@ _start_convert() {
     _detect_subconverter_port
 
     local check_url="http://localhost:${BIN_SUBCONVERTER_PORT}/version"
-    curl --silent --fail "$check_url" >/dev/null 2>&1 && return 0
+    curl --noproxy '*' --silent --fail "$check_url" >/dev/null 2>&1 && return 0
 
     "$BIN_SUBCONVERTER" >"$BIN_SUBCONVERTER_LOG" 2>&1 &
 
     local start now
     start=$(date +%s)
-    while ! curl --silent --fail "$check_url" >/dev/null 2>&1; do
+    while ! curl --noproxy '*' --silent --fail "$check_url" >/dev/null 2>&1; do
         sleep 0.2
         now=$(date +%s)
         [ $((now - start)) -gt 10 ] && { _errorcat "订阅转换服务未启动，请检查日志：$BIN_SUBCONVERTER_LOG"; return 1; }
