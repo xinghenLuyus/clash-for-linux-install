@@ -94,3 +94,27 @@ func (a *app) prompt(label string) (string, bool) {
 		}
 	}
 }
+
+func (a *app) confirm(title string, label string) (bool, bool) {
+	a.modal = &modal{Title: title, Label: label, Value: "y 是 / n 否", Error: "y 立即使用   n/Enter 仅添加   Esc 取消"}
+	defer func() {
+		a.modal = nil
+		a.message = ""
+	}()
+	for {
+		a.render()
+		b := make([]byte, 1)
+		_, err := os.Stdin.Read(b)
+		if err != nil {
+			return false, false
+		}
+		switch b[0] {
+		case 3, 27:
+			return false, false
+		case 13, 10, 'n', 'N':
+			return false, true
+		case 'y', 'Y':
+			return true, true
+		}
+	}
+}

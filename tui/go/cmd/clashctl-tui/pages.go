@@ -10,12 +10,18 @@ import (
 func (a *app) pageContent(key string) string {
 	switch key {
 	case "overview":
+		if a.focused {
+			return a.subPageContent(key)
+		}
 		return a.capture("_tui_status_block")
 	case "profiles":
 		return a.profilesPage()
 	case "proxies":
 		return a.proxiesPage()
 	case "logs":
+		if a.focused {
+			return a.subPageContent(key)
+		}
 		return a.logsPreview()
 	case "settings":
 		return a.settingsPage()
@@ -102,6 +108,11 @@ func (a *app) profilesPage() string {
 	if len(a.profiles) == 0 {
 		b.WriteString("暂无订阅。\n\n")
 		b.WriteString("按 a 新增订阅。新增完成后会在这里显示结果。\n")
+		if a.actionOutput != "" {
+			b.WriteString("\n执行结果\n")
+			b.WriteString(a.actionOutput)
+			b.WriteByte('\n')
+		}
 		return b.String()
 	}
 	for i, p := range a.profiles {

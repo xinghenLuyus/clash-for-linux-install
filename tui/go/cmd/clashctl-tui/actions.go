@@ -51,7 +51,16 @@ func (a *app) executeProfileAction(item string) string {
 		if !ok || strings.TrimSpace(url) == "" {
 			return "已取消新增订阅。"
 		}
-		return a.capture("clashsub add " + shellQuote(strings.TrimSpace(url)))
+		useAfterAdd, ok := a.confirm("新增订阅", "添加成功后立即使用该订阅？")
+		if !ok {
+			return "已取消新增订阅。"
+		}
+		cmd := "clashsub add "
+		if useAfterAdd {
+			cmd += "--use "
+		}
+		cmd += shellQuote(strings.TrimSpace(url))
+		return a.capture(cmd)
 	case "切换订阅":
 		id, ok := a.prompt("请输入订阅 ID")
 		if !ok || strings.TrimSpace(id) == "" {
@@ -208,18 +217,9 @@ func (a *app) handlePageMove(delta int) bool {
 		a.refresh(false)
 		return true
 	case "profiles":
-		if len(a.profiles) == 0 {
-			return true
-		}
-		next := a.subSelected + delta
-		if next >= 0 && next < len(a.profiles) {
-			a.subSelected = next
-			a.actionOutput = ""
-			a.refresh(false)
-		}
-		return true
+		return a.moveWithinCount(len(a.profiles), delta)
 	}
-	return false
+	return a.moveWithinCount(len(a.currentPage().items), delta)
 }
 
 func (a *app) proxyMemberIndexAdd(delta int) {
@@ -227,6 +227,22 @@ func (a *app) proxyMemberIndexAdd(delta int) {
 	if next >= 0 && next < len(a.proxyMembers) {
 		a.subSelected = next
 	}
+}
+
+func (a *app) moveWithinCount(count int, delta int) bool {
+	if count == 0 {
+		a.message = ""
+		return true
+	}
+	next := a.subSelected + delta
+	if next < 0 || next >= count {
+		return true
+	}
+	a.subSelected = next
+	a.message = ""
+	a.actionOutput = ""
+	a.refresh(false)
+	return true
 }
 
 func (a *app) handlePageForward() bool {

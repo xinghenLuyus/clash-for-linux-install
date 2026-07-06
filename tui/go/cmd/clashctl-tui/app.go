@@ -64,28 +64,12 @@ func (a *app) run() error {
 			if a.handlePageMove(-1) {
 				break
 			}
-			if !a.focused && a.selected > 0 {
-				a.selected--
-				a.message = ""
-				a.subSelected = 0
-				a.proxyMember = false
-				a.proxyGroupIndex = 0
-				a.actionOutput = ""
-				a.refresh(false)
-			}
+			a.moveNavigation(-1)
 		case "down":
 			if a.handlePageMove(1) {
 				break
 			}
-			if !a.focused && a.selected < len(a.pages)-1 {
-				a.selected++
-				a.message = ""
-				a.subSelected = 0
-				a.proxyMember = false
-				a.proxyGroupIndex = 0
-				a.actionOutput = ""
-				a.refresh(false)
-			}
+			a.moveNavigation(1)
 		case "left":
 			if !a.handlePageBack() {
 				a.leavePage()
@@ -137,6 +121,7 @@ func (a *app) refreshPageData() {
 	case "profiles":
 		a.loadProfiles()
 	}
+	a.clampSelection()
 }
 
 func (a *app) currentPage() page {
@@ -206,4 +191,48 @@ func (a *app) currentItem() string {
 		return ""
 	}
 	return items[a.subSelected]
+}
+
+func (a *app) moveNavigation(delta int) {
+	if a.focused {
+		return
+	}
+	next := a.selected + delta
+	if next < 0 || next >= len(a.pages) {
+		return
+	}
+	a.selected = next
+	a.message = ""
+	a.subSelected = 0
+	a.proxyMember = false
+	a.proxyGroupIndex = 0
+	a.actionOutput = ""
+	a.refresh(false)
+}
+
+func (a *app) clampSelection() {
+	if a.subSelected < 0 {
+		a.subSelected = 0
+	}
+	switch a.currentPage().key {
+	case "proxies":
+		if a.proxyMember {
+			if a.subSelected >= len(a.proxyMembers) {
+				a.subSelected = maxInt(0, len(a.proxyMembers)-1)
+			}
+			return
+		}
+		if a.subSelected >= len(a.proxyGroups) {
+			a.subSelected = maxInt(0, len(a.proxyGroups)-1)
+		}
+	case "profiles":
+		if a.subSelected >= len(a.profiles) {
+			a.subSelected = maxInt(0, len(a.profiles)-1)
+		}
+	default:
+		items := a.currentPage().items
+		if a.subSelected >= len(items) {
+			a.subSelected = maxInt(0, len(items)-1)
+		}
+	}
 }
