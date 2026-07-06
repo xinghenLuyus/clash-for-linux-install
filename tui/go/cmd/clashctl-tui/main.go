@@ -28,6 +28,7 @@ type app struct {
 	selected     int
 	focused      bool
 	subSelected  int
+	actionOutput string
 	width        int
 	height       int
 	lastWidth    int
@@ -61,12 +62,12 @@ func newApp() *app {
 		home: home,
 		pages: []page{
 			{"overview", "总览", "运行状态、配置偏差、关键摘要", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"运行状态", "配置偏差", "关键路径"}},
-			{"profiles", "订阅", "订阅列表、启用配置、更新记录", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"订阅列表", "当前订阅", "订阅操作"}},
-			{"proxies", "代理", "策略组、节点、延迟与切换", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"策略组", "节点列表", "延迟测试"}},
+			{"profiles", "订阅", "订阅列表、启用配置、更新记录", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"订阅列表", "新增订阅", "切换订阅", "更新订阅", "删除订阅", "订阅日志"}},
+			{"proxies", "代理", "策略组、节点、延迟与切换", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"策略组列表", "查看组节点", "切换节点", "策略组测速", "节点测速"}},
 			{"logs", "日志", "内核日志快速预览", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"最近日志", "日志文件", "订阅日志"}},
-			{"settings", "设置", "代理环境、TUN、Secret、Mixin", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"代理环境", "TUN 模式", "Secret 与 Mixin"}},
-			{"core", "内核", "服务状态、启动停止、升级", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"服务状态", "服务操作", "内核升级"}},
-			{"webui", "Web 面板", "控制台地址与访问方式", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"访问地址", "Secret", "说明"}},
+			{"settings", "设置", "代理环境、TUN、Secret、Mixin", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"开启代理环境", "关闭代理环境", "开启 TUN", "关闭 TUN", "查看 Secret", "修改 Secret", "查看 Mixin", "查看 Runtime"}},
+			{"core", "内核", "服务状态、启动停止、升级", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"服务状态", "启动服务", "停止服务", "重启服务", "升级内核"}},
+			{"webui", "Web 面板", "控制台地址与访问方式", "↑↓ 选择页面 | →/Enter 进入 | r 刷新 | q 退出", []string{"访问地址", "查看 Secret", "刷新地址"}},
 		},
 	}
 }
@@ -101,6 +102,7 @@ func (a *app) run() error {
 				if a.subSelected > 0 {
 					a.subSelected--
 					a.message = ""
+					a.actionOutput = ""
 					a.refresh(false)
 				}
 			} else if a.selected > 0 {
@@ -114,6 +116,7 @@ func (a *app) run() error {
 				if a.subSelected < len(a.currentPage().items)-1 {
 					a.subSelected++
 					a.message = ""
+					a.actionOutput = ""
 					a.refresh(false)
 				}
 			} else if a.selected < len(a.pages)-1 {
@@ -313,8 +316,171 @@ func (a *app) handleEnter() {
 		a.enterPage()
 		return
 	}
+	a.executeAction()
+}
+
+func (a *app) executeAction() {
+	key := a.currentPage().key
+	item := a.currentItem()
+	out := ""
+	switch key {
+	case "overview":
+		out = a.capture("_tui_status_block")
+	case "profiles":
+		out = a.executeProfileAction(item)
+	case "proxies":
+		out = a.executeProxyAction(item)
+	case "logs":
+		out = a.executeLogAction(item)
+	case "settings":
+		out = a.executeSettingsAction(item)
+	case "core":
+		out = a.executeCoreAction(item)
+	case "webui":
+		out = a.executeWebUIAction(item)
+	}
+	a.actionOutput = strings.TrimSpace(out)
 	a.refresh(true)
-	a.message = fmt.Sprintf("已刷新：%s", a.currentItem())
+	a.message = fmt.Sprintf("已执行：%s", item)
+}
+
+func (a *app) executeProfileAction(item string) string {
+	switch item {
+	case "订阅列表":
+		return a.capture("clashsub list")
+	case "新增订阅":
+		url, ok := a.prompt("请输入订阅链接")
+		if !ok || strings.TrimSpace(url) == "" {
+			return "已取消新增订阅。"
+		}
+		return a.capture("clashsub add " + shellQuote(strings.TrimSpace(url)))
+	case "切换订阅":
+		id, ok := a.prompt("请输入订阅 ID")
+		if !ok || strings.TrimSpace(id) == "" {
+			return "已取消切换订阅。"
+		}
+		return a.capture("clashsub use " + shellQuote(strings.TrimSpace(id)))
+	case "更新订阅":
+		id, ok := a.prompt("请输入订阅 ID，留空更新当前订阅")
+		if !ok {
+			return "已取消更新订阅。"
+		}
+		if strings.TrimSpace(id) == "" {
+			return a.capture("clashsub update")
+		}
+		return a.capture("clashsub update " + shellQuote(strings.TrimSpace(id)))
+	case "删除订阅":
+		id, ok := a.prompt("请输入要删除的订阅 ID")
+		if !ok || strings.TrimSpace(id) == "" {
+			return "已取消删除订阅。"
+		}
+		return a.capture("clashsub del " + shellQuote(strings.TrimSpace(id)))
+	case "订阅日志":
+		return strings.Join(readOptionalTail(filepath.Join(a.home, "resources", "profiles.log"), 64*1024, 120), "\n")
+	default:
+		return a.capture("_tui_profiles_block")
+	}
+}
+
+func (a *app) executeProxyAction(item string) string {
+	switch item {
+	case "策略组列表":
+		return a.capture("proxy_print_groups")
+	case "查看组节点":
+		group, ok := a.prompt("请输入策略组名称")
+		if !ok || strings.TrimSpace(group) == "" {
+			return "已取消查看节点。"
+		}
+		return a.capture("proxy_preview_group " + shellQuote(strings.TrimSpace(group)))
+	case "切换节点":
+		group, ok := a.prompt("请输入策略组名称")
+		if !ok || strings.TrimSpace(group) == "" {
+			return "已取消切换节点。"
+		}
+		member, ok := a.prompt("请输入节点名称")
+		if !ok || strings.TrimSpace(member) == "" {
+			return "已取消切换节点。"
+		}
+		return a.capture("proxy_apply " + shellQuote(strings.TrimSpace(group)) + " " + shellQuote(strings.TrimSpace(member)))
+	case "策略组测速":
+		group, ok := a.prompt("请输入策略组名称")
+		if !ok || strings.TrimSpace(group) == "" {
+			return "已取消测速。"
+		}
+		return a.capture("proxy_delay_group_rows " + shellQuote(strings.TrimSpace(group)) + " \"$(proxy_default_delay_url)\" \"$(proxy_default_delay_timeout)\" | proxy_print_delay_rows")
+	case "节点测速":
+		node, ok := a.prompt("请输入节点名称")
+		if !ok || strings.TrimSpace(node) == "" {
+			return "已取消测速。"
+		}
+		return a.capture("proxy_delay_one_row " + shellQuote(strings.TrimSpace(node)) + " \"$(proxy_default_delay_url)\" \"$(proxy_default_delay_timeout)\" | proxy_print_delay_rows")
+	default:
+		return a.capture("_tui_proxies_block")
+	}
+}
+
+func (a *app) executeLogAction(item string) string {
+	switch item {
+	case "日志文件":
+		return "当前日志文件：\n" + a.logPath()
+	case "订阅日志":
+		return strings.Join(readOptionalTail(filepath.Join(a.home, "resources", "profiles.log"), 64*1024, 120), "\n")
+	default:
+		return a.logsPreview()
+	}
+}
+
+func (a *app) executeSettingsAction(item string) string {
+	switch item {
+	case "开启代理环境":
+		return a.capture("clashon")
+	case "关闭代理环境":
+		return a.capture("clashoff")
+	case "开启 TUN":
+		return a.capture("tunon")
+	case "关闭 TUN":
+		return a.capture("tunoff")
+	case "查看 Secret":
+		return a.capture("clashsecret")
+	case "修改 Secret":
+		secret, ok := a.prompt("请输入新的 Web Secret")
+		if !ok {
+			return "已取消修改 Secret。"
+		}
+		return a.capture("clashsecret " + shellQuote(secret))
+	case "查看 Mixin":
+		return readFilePreview(filepath.Join(a.home, "resources", "mixin.yaml"), 80)
+	case "查看 Runtime":
+		return readFilePreview(filepath.Join(a.home, "resources", "runtime.yaml"), 120)
+	default:
+		return a.capture("_tui_settings_block")
+	}
+}
+
+func (a *app) executeCoreAction(item string) string {
+	switch item {
+	case "服务状态":
+		return a.capture("clashstatus")
+	case "启动服务":
+		return a.capture("clashon -s")
+	case "停止服务":
+		return a.capture("clashoff -s")
+	case "重启服务":
+		return a.capture("service_restart")
+	case "升级内核":
+		return a.capture("clashupgrade")
+	default:
+		return a.capture("_tui_core_block")
+	}
+}
+
+func (a *app) executeWebUIAction(item string) string {
+	switch item {
+	case "查看 Secret":
+		return a.capture("clashsecret")
+	default:
+		return a.capture("_webui_show")
+	}
 }
 
 func (a *app) enterPage() {
@@ -325,6 +491,7 @@ func (a *app) enterPage() {
 	a.focused = true
 	a.subSelected = 0
 	a.message = ""
+	a.actionOutput = ""
 	a.refresh(true)
 }
 
@@ -334,6 +501,7 @@ func (a *app) leavePage() {
 	}
 	a.focused = false
 	a.message = ""
+	a.actionOutput = ""
 	a.refresh(false)
 }
 
@@ -369,6 +537,14 @@ func (a *app) subPageContent(key string) string {
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
+	b.WriteString(a.subPageHint(key))
+	b.WriteString("\n\n")
+
+	if a.actionOutput != "" {
+		b.WriteString("执行结果\n")
+		b.WriteString(a.actionOutput)
+		return b.String()
+	}
 
 	switch key {
 	case "overview":
@@ -387,6 +563,73 @@ func (a *app) subPageContent(key string) string {
 		return b.String() + a.capture("_tui_webui_block")
 	default:
 		return b.String()
+	}
+}
+
+func (a *app) subPageHint(key string) string {
+	item := a.currentItem()
+	switch key + "/" + item {
+	case "profiles/新增订阅":
+		return "输入订阅链接后添加到 Profiles。"
+	case "profiles/切换订阅":
+		return "输入订阅 ID 后切换当前配置，并重新合并运行配置。"
+	case "profiles/更新订阅":
+		return "输入订阅 ID 更新指定订阅；留空更新当前订阅。"
+	case "profiles/删除订阅":
+		return "输入订阅 ID 删除未启用的订阅。"
+	case "proxies/查看组节点":
+		return "输入策略组名称，查看该组当前节点和候选节点。"
+	case "proxies/切换节点":
+		return "依次输入策略组名称和节点名称，直接调用 Clash API 切换。"
+	case "proxies/策略组测速":
+		return "输入策略组名称，对组内节点测速。"
+	case "proxies/节点测速":
+		return "输入节点名称，对单个节点测速。"
+	case "settings/开启代理环境":
+		return "复用 clashon：启动服务并设置当前终端代理环境。"
+	case "settings/关闭代理环境":
+		return "复用 clashoff：停止服务并清理当前终端代理环境。"
+	case "settings/开启 TUN":
+		return "复用 tunon：修改 mixin 并重启内核。"
+	case "settings/关闭 TUN":
+		return "复用 tunoff：关闭 TUN 并重启内核。"
+	case "settings/修改 Secret":
+		return "输入新的 Web Secret，写入 mixin 并重启生效。"
+	case "core/升级内核":
+		return "复用 clashupgrade，通过控制器 API 触发内核升级。"
+	default:
+		return "Enter 执行当前子项；结果会显示在右侧面板内。"
+	}
+}
+
+func (a *app) prompt(label string) (string, bool) {
+	value := ""
+	for {
+		a.message = label + ": " + value
+		a.render()
+		b := make([]byte, 1)
+		_, err := os.Stdin.Read(b)
+		if err != nil {
+			a.message = ""
+			return "", false
+		}
+		switch b[0] {
+		case 3, 27:
+			a.message = ""
+			return "", false
+		case 13, 10:
+			a.message = ""
+			return value, true
+		case 127, 8:
+			rs := []rune(value)
+			if len(rs) > 0 {
+				value = string(rs[:len(rs)-1])
+			}
+		default:
+			if b[0] >= 32 {
+				value += string(b)
+			}
+		}
 	}
 }
 
@@ -471,6 +714,43 @@ func readTailLines(path string, maxBytes int64, maxLines int) ([]string, error) 
 		lines = lines[len(lines)-maxLines:]
 	}
 	return lines, nil
+}
+
+func readOptionalTail(path string, maxBytes int64, maxLines int) []string {
+	lines, err := readTailLines(path, maxBytes, maxLines)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{"暂无日志文件。"}
+		}
+		return []string{"读取失败：" + err.Error()}
+	}
+	if len(lines) == 0 {
+		return []string{"暂无日志。"}
+	}
+	return lines
+}
+
+func readFilePreview(path string, maxLines int) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "文件不存在：" + path
+		}
+		return "读取失败：" + err.Error()
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+		lines = append(lines, "...")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 func pad(s string, width int) string {
