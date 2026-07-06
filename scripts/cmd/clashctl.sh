@@ -20,11 +20,16 @@ clashctl() {
     -h | --help | help) sub_cmd=help ;;
     esac
 
+    [ "$sub_cmd" = webui ] && {
+        _webui_show "$@"
+        return
+    }
+
     local target="clash${sub_cmd}"
     declare -F "$target" >&/dev/null || {
         _failcat "Unknown subcommand: $target"
         _failcat "Use 'clashctl help' for usage information."
         return
     }
-    "$target" "$@"
+    CLASHCTL_DISPATCH_SUB_CMD=$sub_cmd "$target" "$@"
 }

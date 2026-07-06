@@ -1,0 +1,54 @@
+# 变更记录
+
+## TUI 框架第一版
+
+- 新增 `clashctl tui` / `clashui` 全屏 TUI 入口，基于 `fzf` 搭建主菜单、预览区和基础动作路由。
+- 新增 `scripts/tui/` 框架目录：
+  - `core.sh`：TUI 主循环、fzf 参数、安装后入口检测。
+  - `views.sh`：总览、订阅、节点、日志、Mixin、Web UI、内核服务等预览渲染。
+  - `actions.sh`：订阅、节点、TUN、日志、Mixin、Web UI、服务管理等动作路由。
+- 原 `clashctl ui` 的 Web 面板地址功能迁移为 `clashctl webui`。
+- 保留 `clashctl ui` 兼容入口，并将其导向新的 TUI。
+- 安装流程新增 `fzf` 检测：
+  - 检测到 `fzf` 且处于交互终端时，可选择安装后直接进入 TUI。
+  - 未检测到 `fzf` 时，回退到原 Web UI/CLI 流程。
+- 安装复制流程新增 `scripts/tui` 目录同步。
+- 新增 `scripts/lib/api.sh`，预留 Clash/Mihomo HTTP API 公共封装，后续用于 Rules、Connections、Traffic、Providers 等 TUI 页面。
+- Docker 验证中发现 `fzf` preview 子进程依赖导出的 `CLASHCTL_HOME`，已在 TUI 入口补充 `export CLASHCTL_HOME` 兜底。
+- 参考 Clash Verge Rev 的 `calcuProxies` 数据模型扩展 API 层：
+  - 将 Clash HTTP API 的 base、secret、URL 编码、GET/POST/PUT/PATCH/DELETE 统一到 `scripts/lib/api.sh`。
+  - 新增代理组、普通节点、provider 节点、节点选择、节点测速、组测速、内核升级等公共函数。
+  - `node.sh` 改为复用公共 API 层，保留原有交互逻辑。
+  - 修复节点名 URL 编码，改为按 UTF-8 字节编码，避免中文节点名生成错误 `%FFFFFFFF...`。
+  - 策略组排序对齐 Clash Verge Rev：普通策略组在前，`GLOBAL.all` 引用的策略组移动到后段。
+  - 节点展示补充 provider 与 UDP/XUDP/TFO/MPTCP/SMUX 等能力标签。
+  - `upgrade.sh` 改为复用 `api_upgrade`，不再手写控制器 API 请求。
+- 调整 `clashctl ui` 兼容入口：
+  - 进入时明确提示“原 clashctl ui 已更名为 clashctl webui。”
+  - 若未安装 `fzf`，直接显示错误并退出，不再回退到 Web UI，避免歧义。
+- 调整 `clashui` 直接命令：
+  - 直接输入 `clashui` 时不显示旧 `clashctl ui` 改名提示，直接进入 TUI。
+  - 仅通过 `clashctl ui` 旧子命令进入时显示兼容提示。
+- 收敛 Web UI 入口：
+  - 官方入口保留 `clashctl webui`。
+  - 底层显示逻辑迁为内部 `_webui_show`。
+  - 删除直接 Web UI 用户入口，避免出现两个 Web UI 命令。
+- 新增 `scripts/lib/proxy.sh` 作为 Clash Verge 风格代理共享层：
+  - 统一策略组列表、组内节点、provider 信息、能力标签、节点切换、组测速、节点测速、排序/过滤和 preview。
+  - `clashctl node` 改为走 `proxy_cli_node`，避免 CLI node 与 TUI Proxies 出现两套体验。
+- 新增 `scripts/tui/proxies.sh`：
+  - TUI Proxies 页面直接复用 `proxy.sh`，不再调用旧 `clashnode` 交互。
+  - 支持策略组列表、组 preview、组内节点选择、节点 preview 和切换。
+  - 支持 `Ctrl-D` 对当前策略组或当前节点测速，`Ctrl-R` 刷新策略组列表，fzf 原生搜索过滤节点。
+- 新增 `scripts/tui/settings.sh`：
+  - Settings 页面按 Verge 风格组织。
+  - Proxy Environment 复用 `clashon` / `clashoff`，保持与 CLI 行为一致。
+  - TUN Mode 复用 `tunon` / `tunoff`。
+  - Secret、Mixin、Runtime、Web UI 复用既有命令/函数。
+  - Ports / Allow LAN / DNS 先保留入口，后续通过 `mixin.yaml + _merge_config_restart` 实现。
+- 新增 Overview live config 与 drift 检测：
+  - `api.sh` 新增 `api_configs`，读取 Clash/Mihomo 当前运行配置。
+  - 新增 `scripts/lib/drift.sh`，对比 `runtime.yaml` 与 live core 配置。
+  - 新增 `scripts/tui/overview.sh`，Overview 优先展示 live API 状态；服务未运行或 API 不可用时回退展示 `runtime.yaml`。
+  - 当 live 配置与 `runtime.yaml` 不一致时，仅在 TUI 中提示字段差异，不自动覆盖任何配置。
+  - Drift 提示用于解释 Web UI 或外部 API 临时修改运行态后，重启/切订阅/重新合并会回到 `mixin.yaml/runtime.yaml` 的权威配置链路。

@@ -16,12 +16,16 @@ install_clashctl
 
 _merge_config
 _detect_proxy_port
-clashui
 [ -z "$(_get_secret)" ] && clashsecret "$(_get_random_val)" >/dev/null
 clashsecret
 
 _valid_config "$CLASH_CONFIG_BASE" && {
     CLASHCTL_SUB_URL="file://$CLASH_CONFIG_BASE"
 }
-clashsub add --use "$CLASHCTL_SUB_URL"
+
+if [ -n "$CLASHCTL_SUB_URL" ]; then
+    clashsub add --use "$CLASHCTL_SUB_URL"
+else
+    _tui_install_prompt || clashsub add --use "$CLASHCTL_SUB_URL"
+fi
 _okcat '🎉' "请执行 source ~/.bashrc 为当前 SHELL 加载 clashctl 命令"

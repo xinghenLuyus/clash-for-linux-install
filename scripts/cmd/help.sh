@@ -10,7 +10,9 @@ Commands:
   on                    开启代理
   off                   关闭代理
   status                内核状态
-  ui                    面板地址
+  tui                   全屏 TUI 管理界面
+  webui                 Web 面板地址
+  ui                    兼容入口，等同于 tui
   sub                   订阅管理
   node                  节点切换
   tun                   Tun 模式

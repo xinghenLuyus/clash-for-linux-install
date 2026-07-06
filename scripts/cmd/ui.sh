@@ -1,30 +1,36 @@
 #!/usr/bin/env bash
 
 clashui() {
-    _detect_ext_addr
-    service_is_active >&/dev/null || service_start >/dev/null
-    service_is_active >&/dev/null || _errorcat "无法启动服务，请检查日志" || return
+    local from_legacy_ui=false
+    [ "${CLASHCTL_DISPATCH_SUB_CMD:-}" = ui ] && from_legacy_ui=true
 
-    local query_url='https://api64.ipify.org'
-    local public_ip
-    public_ip=$(curl -s --noproxy "*" --location --max-time 2 "$query_url")
-    local public_address="http://${public_ip:-公网}:${EXT_PORT}/ui"
+    case "${1:-}" in
+    -h | --help)
+        if [ "$from_legacy_ui" = true ]; then
+            cat <<EOF
 
-    local local_ip=$EXT_IP
-    local local_address="http://${local_ip}:${EXT_PORT}/ui"
+原 clashctl ui 已更名为 clashctl webui。
 
-    local common_address='http://board.zash.run.place'
-    
-    printf "\n"
-    printf "╔═══════════════════════════════════════════════╗\n"
-    printf "║                %s                  ║\n" "$(_okcat 'Web 控制台')"
-    printf "║═══════════════════════════════════════════════║\n"
-    printf "║                                               ║\n"
-    printf "║     🔓 注意放行端口：%-5s                    ║\n" "$EXT_PORT"
-    printf "║     🏠 内网：%-31s  ║\n" "$local_address"
-    printf "║     🌏 公网：%-31s  ║\n" "$public_address"
-    printf "║     ☁️  公共：%-31s  ║\n" "$common_address"
-    printf "║                                               ║\n"
-    printf "╚═══════════════════════════════════════════════╝\n"
-    printf "\n"
+Usage:
+  clashctl ui      兼容入口，打开 TUI
+  clashctl webui   查看 Web 控制台地址
+  clashui          直接打开 TUI
+
+EOF
+            return 0
+        fi
+        clashtui -h
+        return 0
+        ;;
+    esac
+
+    [ "$from_legacy_ui" = true ] && _okcat 'ℹ️ ' '原 clashctl ui 已更名为 clashctl webui。'
+
+    if declare -F clashtui >&/dev/null; then
+        clashtui "$@"
+        return
+    fi
+
+    _errorcat "TUI 未加载，请检查 clashctl 安装是否完整"
+    return 1
 }

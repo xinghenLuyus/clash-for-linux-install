@@ -23,7 +23,6 @@ clashupgrade() {
         esac
     done
 
-    _detect_ext_addr
     service_is_active >&/dev/null || service_start >/dev/null
     _okcat '⏳' "请求内核升级..."
 
@@ -34,14 +33,7 @@ clashupgrade() {
     }
 
     local res
-    res=$(
-        curl -X POST \
-            --silent \
-            --noproxy "*" \
-            --location \
-            -H "Authorization: Bearer $(_get_secret)" \
-            "http://${EXT_IP}:${EXT_PORT}/upgrade?channel=$channel"
-    )
+    res=$(api_upgrade "$channel")
 
     [ -n "$follow_pid" ] && kill "$follow_pid" >/dev/null 2>&1
 

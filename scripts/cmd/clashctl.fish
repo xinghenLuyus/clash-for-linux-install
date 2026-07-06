@@ -78,12 +78,18 @@ function clashctl
             set sub help
     end
 
+    if test "$sub" = webui
+        __clashctl_run _webui_show $argv
+        return $status
+    end
+
     set -l target clash$sub
     if not functions -q $target
         echo "Unknown subcommand: $target"
         echo "Use 'clashctl help' for usage information."
         return 1
     end
+    set -lx CLASHCTL_DISPATCH_SUB_CMD $sub
     $target $argv
 end
 
@@ -92,7 +98,7 @@ if test -d $CLASHCTL_HOME/scripts/cmd
     for cmd_file in $CLASHCTL_HOME/scripts/cmd/*.sh
         set -l base (basename -- $cmd_file .sh)
         switch $base
-            case clashctl on off
+            case clashctl on off webui
                 continue
         end
         set -l fn clash$base

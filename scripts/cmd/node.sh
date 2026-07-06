@@ -8,41 +8,7 @@
 # ─────────────────────────────────────────────────────────────
 
 clashnode() {
-    case "${1:-}" in
-    -h | --help | help)
-        node_help
-        return 0
-        ;;
-    esac
-
-    service_is_active >&/dev/null || {
-        _failcat "$CLASHCTL_KERNEL 未运行，请先执行 clashctl on"
-        return 1
-    }
-
-    case "${1:-}" in
-    ls | list)
-        shift
-        _node_list "$@"
-        ;;
-    delay)
-        shift
-        _node_delay "$@"
-        ;;
-    use)
-        shift
-        _node_use "$@"
-        ;;
-    -* | '')
-        # 省略子命令或直接带选项 → 交互式切换；选项由 _node_use 自行解析
-        _node_use "$@"
-        ;;
-    *)
-        _errorcat "未知 node 子命令：$1"
-        node_help
-        return 1
-        ;;
-    esac
+    proxy_cli_node "$@"
 }
 
 ########################################
@@ -50,37 +16,18 @@ clashnode() {
 ########################################
 
 _node_api_base() {
-    _detect_ext_addr # 填充 EXT_PORT（服务运行时不会触发改端口分支）
-    printf 'http://127.0.0.1:%s' "$EXT_PORT"
+    api_base
 }
 
 # 统一 curl 封装：--noproxy '*' 避免走系统代理；secret 非空时带 Bearer
 # 用法：_node_curl <METHOD> <PATH> [额外 curl 参数...]
 _node_curl() {
-    local method=$1 path=$2
-    shift 2
-    local secret base auth=()
-    base=$(_node_api_base)
-    secret=$(_get_secret)
-    [ -n "$secret" ] && auth=(-H "Authorization: Bearer $secret")
-    curl -s --noproxy '*' --max-time "${CLASHCTL_API_TIMEOUT:-10}" \
-        -X "$method" "${auth[@]}" "${base}${path}" "$@"
+    api_curl "$@"
 }
 
 # 路径段 URL 编码（组/节点名常含空格、中文、emoji）；LC_ALL=C 按字节百分号编码
 _node_urlencode() {
-    local LC_ALL=C s=$1 out='' c i
-    for ((i = 0; i < ${#s}; i++)); do
-        c=${s:i:1}
-        case $c in
-        [a-zA-Z0-9._~-]) out+=$c ;;
-        *)
-            printf -v c '%%%02X' "'$c"
-            out+=$c
-            ;;
-        esac
-    done
-    printf '%s' "$out"
+    api_urlencode "$@"
 }
 
 _node_require_arg() {
@@ -123,17 +70,24 @@ _node_validate_delay_timeout() {
 
 # 列出所有"策略组"（含 .all 成员列表的项）：name <TAB> type <TAB> now
 _node_groups() {
-    _node_curl GET /proxies | "$BIN_YQ" -p json '
-        .proxies | to_entries | .[]
-        | select(.value.all != null)
-        | [.key, .value.type, (.value.now // "")] | @tsv' 2>/dev/null
+    api_proxy_groups_tsv
 }
 
 _node_proxies() {
-    _node_curl GET /proxies | "$BIN_YQ" -p json '
-        .proxies | to_entries | .[]
-        | select(.value.all == null)
-        | [.key, .value.type] | @tsv' 2>/dev/null
+    {
+        api_proxy_leaf_tsv
+        api_proxy_provider_leaf_tsv
+    } | awk -F '\t' '
+      !seen[$1]++ {
+        meta=$2
+        if ($3 != "") meta=meta "@" $3
+        if ($4 == "true") meta=meta " UDP"
+        if ($5 == "true") meta=meta " XUDP"
+        if ($6 == "true") meta=meta " TFO"
+        if ($7 == "true") meta=meta " MPTCP"
+        if ($8 == "true") meta=meta " SMUX"
+        print $1 "\t" meta
+      }'
 }
 
 # 单次拉取 /proxies，判定名称属于哪一类，结果打到 stdout：
@@ -143,7 +97,7 @@ _node_proxies() {
 _node_classify() {
     local exists is_group
     IFS=$'\t' read -r exists is_group < <(
-        _node_curl GET /proxies | NODE_NAME=$1 "$BIN_YQ" -p json '
+        api_proxies | NODE_NAME=$1 "$BIN_YQ" -p json '
             [(.proxies[strenv(NODE_NAME)] != null),
              (.proxies[strenv(NODE_NAME)].all != null)] | @tsv' 2>/dev/null
     )
@@ -158,23 +112,17 @@ _node_classify() {
 
 # 某组的成员节点列表（每行一个）
 _node_members() {
-    local enc
-    enc=$(_node_urlencode "$1")
-    _node_curl GET "/proxies/$enc" | "$BIN_YQ" -p json '.all // [] | .[]' 2>/dev/null
+    api_proxy "$1" | "$BIN_YQ" -p json '.all // [] | .[]' 2>/dev/null
 }
 
 # 一次拉取某组详情 JSON（供需同时读取 now 与 members 的场景本地复用，省一次 HTTP）
 _node_group_json() {
-    local enc
-    enc=$(_node_urlencode "$1")
-    _node_curl GET "/proxies/$enc"
+    api_proxy "$1"
 }
 
 # 某组当前选中节点
 _node_now() {
-    local enc
-    enc=$(_node_urlencode "$1")
-    _node_curl GET "/proxies/$enc" | "$BIN_YQ" -p json '.now // ""' 2>/dev/null
+    api_proxy "$1" | "$BIN_YQ" -p json '.now // ""' 2>/dev/null
 }
 
 ########################################
@@ -183,12 +131,8 @@ _node_now() {
 
 # PUT /proxies/:group  body {"name":"<member>"}；204=成功 400=不可切换 404=组不存在
 _node_apply() {
-    local group=$1 member=$2 enc body code
-    enc=$(_node_urlencode "$group")
-    body=$(NODE=$member "$BIN_YQ" -n -o=json '{"name": strenv(NODE)}') # 安全构造 JSON，免手动转义
-    code=$(_node_curl PUT "/proxies/$enc" \
-        -H 'Content-Type: application/json' --data-raw "$body" \
-        -o /dev/null -w '%{http_code}')
+    local group=$1 member=$2 code
+    code=$(api_select_proxy "$group" "$member")
     case $code in
     204) _okcat "已切换 [$group] → $member" ;;
     400) _failcat "切换失败：节点 [$member] 不在策略组 [$group] 内，或该组不可手动切换" ;;
@@ -891,9 +835,8 @@ _node_delay_primary() {
 }
 
 _node_delay_one() {
-    local name=$1 qs=$2 enc resp delay
-    enc=$(_node_urlencode "$name")
-    resp=$(_node_curl GET "/proxies/$enc/delay?$qs")
+    local name=$1 url=$2 timeout=$3 resp delay
+    resp=$(api_proxy_delay "$name" "$url" "$timeout")
     delay=$("$BIN_YQ" -p json '.delay // ""' <<<"$resp" 2>/dev/null)
     printf '%s\t%s\n' "$name" "$delay"
 }
@@ -902,15 +845,14 @@ _node_delay_member_rows() {
     local url=$1 timeout=$2
     shift 2
     local members=("$@") name
-    local qs concurrency active=0
-    qs="timeout=${timeout}&url=$(_node_urlencode "$url")"
+    local concurrency active=0
     concurrency=${CLASHCTL_NODE_DELAY_CONCURRENCY:-8}
     [[ "$concurrency" =~ ^[0-9]+$ ]] || concurrency=8
     ((concurrency < 1)) && concurrency=1
 
     {
         for name in "${members[@]}"; do
-            _node_delay_one "$name" "$qs" &
+            _node_delay_one "$name" "$url" "$timeout" &
             ((active += 1))
             if ((active >= concurrency)); then
                 wait
@@ -925,10 +867,8 @@ _node_delay_rows() {
     local group=$1 url=$2 timeout=$3
     shift 3
     local members=("$@")
-    local enc qs resp code body name delay
-    enc=$(_node_urlencode "$group")
-    qs="timeout=${timeout}&url=$(_node_urlencode "$url")"
-    resp=$(_node_curl GET "/group/$enc/delay?$qs" -w $'\n%{http_code}')
+    local resp code body name delay
+    resp=$(api_group_delay_with_code "$group" "$url" "$timeout")
     code=${resp##*$'\n'}
     body=${resp%$'\n'*}
 
@@ -965,12 +905,10 @@ _node_delay_fallback() {
 
 _node_delay_group() {
     local group=$1 url=$2 timeout=$3
-    local enc qs resp code body
-    enc=$(_node_urlencode "$group")
-    qs="timeout=${timeout}&url=$(_node_urlencode "$url")"
 
     _okcat "正在测速策略组 [$group]（可能需要数秒）..."
-    resp=$(_node_curl GET "/group/$enc/delay?$qs" -w $'\n%{http_code}')
+    local resp code body
+    resp=$(api_group_delay_with_code "$group" "$url" "$timeout")
     code=${resp##*$'\n'}
     body=${resp%$'\n'*}
 
