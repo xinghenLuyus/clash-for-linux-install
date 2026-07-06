@@ -4,6 +4,7 @@ set -euo pipefail
 MODULE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT="$(cd -- "${MODULE_DIR}/../.." && pwd -P)"
 OUT="${ROOT}/bin/clashctl-tui"
+DIST_DIR="${MODULE_DIR}/dist"
 GO_BIN="${GO_BIN:-}"
 export GOCACHE="${GOCACHE:-${ROOT}/.cache/go-build}"
 export GOMODCACHE="${GOMODCACHE:-${ROOT}/.cache/go-mod}"
@@ -21,7 +22,7 @@ if [ -z "$GO_BIN" ]; then
     exit 1
 fi
 
-mkdir -p "${ROOT}/bin" "$GOCACHE" "$GOMODCACHE"
+mkdir -p "${ROOT}/bin" "$DIST_DIR" "$GOCACHE" "$GOMODCACHE"
 
 build_one() {
     local goos=$1 goarch=$2 out=$3
@@ -38,19 +39,19 @@ local)
     build_one local local "$OUT"
     ;;
 linux-amd64 | amd64 | x86_64)
-    build_one linux amd64 "${ROOT}/bin/clashctl-tui-linux-amd64"
+    build_one linux amd64 "${DIST_DIR}/clashctl-tui-linux-amd64"
     ;;
 linux-386 | 386 | x86)
-    build_one linux 386 "${ROOT}/bin/clashctl-tui-linux-386"
+    build_one linux 386 "${DIST_DIR}/clashctl-tui-linux-386"
     ;;
 linux)
-    build_one linux amd64 "${ROOT}/bin/clashctl-tui-linux-amd64"
-    build_one linux 386 "${ROOT}/bin/clashctl-tui-linux-386"
+    build_one linux amd64 "${DIST_DIR}/clashctl-tui-linux-amd64"
+    build_one linux 386 "${DIST_DIR}/clashctl-tui-linux-386"
     ;;
 all)
     build_one local local "$OUT"
-    build_one linux amd64 "${ROOT}/bin/clashctl-tui-linux-amd64"
-    build_one linux 386 "${ROOT}/bin/clashctl-tui-linux-386"
+    build_one linux amd64 "${DIST_DIR}/clashctl-tui-linux-amd64"
+    build_one linux 386 "${DIST_DIR}/clashctl-tui-linux-386"
     ;;
 -h | --help)
     cat <<EOF
@@ -59,8 +60,8 @@ Usage:
 
 Outputs:
   local        bin/clashctl-tui
-  linux-amd64  bin/clashctl-tui-linux-amd64
-  linux-386    bin/clashctl-tui-linux-386
+  linux-amd64  tui/go/dist/clashctl-tui-linux-amd64
+  linux-386    tui/go/dist/clashctl-tui-linux-386
 EOF
     ;;
 *)

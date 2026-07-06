@@ -268,12 +268,40 @@ install_clashctl() {
     /bin/cp -a "$CLASHCTL_SRC/scripts/lib" "$target_dir/scripts/"
     /bin/cp -a "$CLASHCTL_SRC/scripts/init" "$target_dir/scripts/"
     [ -d "$CLASHCTL_SRC/scripts/tui" ] && /bin/cp -a "$CLASHCTL_SRC/scripts/tui" "$target_dir/scripts/"
-    [ -x "$CLASHCTL_SRC/bin/clashctl-tui" ] && /usr/bin/install -m 755 "$CLASHCTL_SRC/bin/clashctl-tui" "$target_dir/bin/clashctl-tui"
+    install_tui_binary "$target_dir"
 
     for resource in "$CLASHCTL_SRC"/resources/*; do
         /bin/cp -r "$resource" "$target_dir/resources/"
     done
     apply_rc
+}
+
+install_tui_binary() {
+    local target_dir=$1
+    local src=""
+    local arch
+
+    if [ -x "$CLASHCTL_SRC/bin/clashctl-tui" ]; then
+        src="$CLASHCTL_SRC/bin/clashctl-tui"
+    else
+        case "$(uname -m)" in
+        x86_64 | amd64)
+            arch=amd64
+            ;;
+        i386 | i686)
+            arch=386
+            ;;
+        *)
+            arch=
+            ;;
+        esac
+        [ -n "${arch:-}" ] && [ -x "$CLASHCTL_SRC/tui/go/dist/clashctl-tui-linux-${arch}" ] && {
+            src="$CLASHCTL_SRC/tui/go/dist/clashctl-tui-linux-${arch}"
+        }
+    fi
+
+    [ -n "$src" ] || return 0
+    /usr/bin/install -m 755 "$src" "$target_dir/bin/clashctl-tui"
 }
 
 detect_rc() {

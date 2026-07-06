@@ -91,3 +91,8 @@
   - 使用 `golang.org/x/term` 的 `MakeRaw` / `Restore` / `GetSize` 替代 shell `stty`。
   - 增加 CJK/emoji 等宽字符列宽计算，避免中文内容在 Ubuntu 终端中被错误补齐后自动换行。
   - 构建脚本新增项目内 `.cache/go-mod` 模块缓存，避免写入用户目录。
+- 新增 Go TUI 预编译产物目录 `tui/go/dist/`：
+  - `clashctl-tui-linux-amd64`
+  - `clashctl-tui-linux-386`
+  - Ubuntu 无法访问 `proxy.golang.org` 时，可直接使用 git 中的预编译产物，无需本机下载 Go module。
+- 安装流程会按当前 Linux 架构优先复制 `tui/go/dist/clashctl-tui-linux-*` 到 `$CLASHCTL_HOME/bin/clashctl-tui`。
